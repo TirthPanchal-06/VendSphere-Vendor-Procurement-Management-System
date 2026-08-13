@@ -115,11 +115,21 @@ const seedDatabase = async () => {
         ])]
       );
 
-      // Seed vendors
+      // Seed vendors (13 vendors total, adding 10 diverse corporate vendors)
       const vendors = [
-        { name: 'Apex Sourcing', contact: 'Alice Smith', email: `sales@apex-${id}.com`, cat: 'Office Supplies', terms: 'Net 30', rating: 5.0, score: 100, status: 'Active' },
-        { name: 'Industrial Parts Group', contact: 'Bob Johnson', email: `info@industrial-${id}.com`, cat: 'Hardware', terms: 'Net 15', rating: 4.2, score: 85, status: 'Active' },
-        { name: 'Custom Printing Services', contact: 'Charlie Brown', email: `print@print-${id}.com`, cat: 'Marketing', terms: 'Due on Receipt', rating: 5.0, score: 100, status: 'Pending Approval' }
+        { name: 'Apex Sourcing', contact: 'Alice Smith', email: `sales@apex-${id}.com`, phone: '555-0101', cat: 'Office Supplies', terms: 'Net 30', rating: 5.0, score: 100, status: 'Active' },
+        { name: 'Industrial Parts Group', contact: 'Bob Johnson', email: `info@industrial-${id}.com`, phone: '555-0102', cat: 'Hardware', terms: 'Net 15', rating: 4.2, score: 85, status: 'Active' },
+        { name: 'Custom Printing Services', contact: 'Charlie Brown', email: `print@print-${id}.com`, phone: '555-0103', cat: 'Marketing', terms: 'Due on Receipt', rating: 5.0, score: 100, status: 'Pending Approval' },
+        { name: 'Nexus Logistics & Supply', contact: 'Sarah Jenkins', email: `info@nexuslogistics-${id}.com`, phone: '555-0104', cat: 'Logistics & Freight', terms: 'Net 30', rating: 4.8, score: 94, status: 'Active' },
+        { name: 'CloudScale Systems & IT', contact: 'David Chen', email: `enterprise@cloudscale-${id}.com`, phone: '555-0105', cat: 'IT & Software', terms: 'Net 15', rating: 4.9, score: 98, status: 'Active' },
+        { name: 'Global Freight Forwarders', contact: 'Elena Rostova', email: `dispatch@globalfreight-${id}.com`, phone: '555-0106', cat: 'Logistics & Freight', terms: 'Net 60', rating: 4.1, score: 82, status: 'Active' },
+        { name: 'Vanguard Security Solutions', contact: 'Marcus Vance', email: `contact@vanguardsec-${id}.com`, phone: '555-0107', cat: 'Facility & Security', terms: 'Net 30', rating: 4.6, score: 91, status: 'Active' },
+        { name: 'BioGreen Office Supplies', contact: 'Karen Green', email: `orders@biogreen-${id}.com`, phone: '555-0108', cat: 'Office Supplies', terms: 'Net 15', rating: 4.7, score: 92, status: 'Active' },
+        { name: 'Precision Metalworks & Fabrication', contact: 'Michael Chang', email: `quotes@precisionmetal-${id}.com`, phone: '555-0109', cat: 'Hardware & Machinery', terms: 'Net 30', rating: 4.4, score: 88, status: 'Active' },
+        { name: 'ProMedia Marketing Agency', contact: 'Jessica Taylor', email: `hello@promedia-${id}.com`, phone: '555-0110', cat: 'Marketing & Media', terms: 'Due on Receipt', rating: 4.3, score: 86, status: 'Pending Approval' },
+        { name: 'Titan Chemical Solutions', contact: 'Robert Lawson', email: `support@titanchem-${id}.com`, phone: '555-0111', cat: 'Raw Materials', terms: 'Net 60', rating: 3.5, score: 68, status: 'Blocked' },
+        { name: 'Apex Energy & Fuel Co.', contact: 'Daniel Garcia', email: `b2b@apexenergy-${id}.com`, phone: '555-0112', cat: 'Utilities & Energy', terms: 'Net 15', rating: 4.8, score: 95, status: 'Active' },
+        { name: 'Summit Consulting Group', contact: 'Amanda Sterling', email: `advisory@summitcg-${id}.com`, phone: '555-0113', cat: 'Professional Services', terms: 'Net 30', rating: 5.0, score: 100, status: 'Active' }
       ];
 
       for (const v of vendors) {
@@ -139,7 +149,7 @@ const seedDatabase = async () => {
         await client.query(
           `INSERT INTO vendors (name, contact_name, email, phone, category, payment_terms, rating, performance_score, status, user_id) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [v.name, v.contact, v.email, '555-0199', v.cat, v.terms, v.rating, v.score, v.status, localUserRes.rows[0].id]
+          [v.name, v.contact, v.email, v.phone || '555-0199', v.cat, v.terms, v.rating, v.score, v.status, localUserRes.rows[0].id]
         );
       }
 
@@ -184,6 +194,8 @@ const seedDatabase = async () => {
     console.error('Failed to seed database:', error);
   } finally {
     client.release();
+    await pool.end();
+    process.exit(0);
   }
 };
 
