@@ -5,7 +5,8 @@ const activeTenantsCache = new Map();
 const CACHE_TTL = 60 * 1000; // 1 minute cache lifetime
 
 const fetchAndCacheTenant = async (tenantId) => {
-  const cached = activeTenantsCache.get(tenantId);
+  const normalizedId = (tenantId || '').trim().toLowerCase();
+  const cached = activeTenantsCache.get(normalizedId);
   const now = Date.now();
 
   if (cached && (now - cached.timestamp < CACHE_TTL)) {
@@ -14,8 +15,8 @@ const fetchAndCacheTenant = async (tenantId) => {
 
   try {
     const result = await queryGlobal(
-      'SELECT id, name, subdomain, status FROM public.tenants WHERE id = $1 OR subdomain = $2',
-      [tenantId, tenantId]
+      'SELECT id, name, subdomain, status FROM public.tenants WHERE LOWER(id) = LOWER($1) OR LOWER(subdomain) = LOWER($2)',
+      [normalizedId, normalizedId]
     );
 
     if (result.rows.length === 0) {
@@ -25,8 +26,8 @@ const fetchAndCacheTenant = async (tenantId) => {
     const tenant = result.rows[0];
     
     // Store in cache
-    activeTenantsCache.set(tenant.id, { tenant, timestamp: now });
-    activeTenantsCache.set(tenant.subdomain, { tenant, timestamp: now });
+    activeTenantsCache.set(tenant.id.toLowerCase(), { tenant, timestamp: now });
+    activeTenantsCache.set(tenant.subdomain.toLowerCase(), { tenant, timestamp: now });
 
     return tenant;
   } catch (error) {
@@ -36,8 +37,8 @@ const fetchAndCacheTenant = async (tenantId) => {
 };
 
 export const tenantResolver = async (req, res, next) => {
-  // 1. Resolve tenant ID from headers or subdomains
-  let tenantId = req.headers['x-tenant-id'];
+  // 1. Resolve tenant ID from headers, body, or query
+  let tenantId = req.headers['x-tenant-id'] || req.body?.tenantId || req.query?.tenantId;
 
   if (!tenantId) {
     const hostname = req.hostname; // e.g. acme.vendsphere.com or localhost
@@ -53,6 +54,8 @@ export const tenantResolver = async (req, res, next) => {
   const isGlobalRoute = 
     req.path.startsWith('/api/tenants/register') || 
     req.path.startsWith('/api/auth/global-login') ||
+    req.path.startsWith('/api/subscriptions/webhooks') ||
+    req.path === '/api/subscriptions/plans' ||
     req.path === '/api/health';
 
   if (!tenantId) {

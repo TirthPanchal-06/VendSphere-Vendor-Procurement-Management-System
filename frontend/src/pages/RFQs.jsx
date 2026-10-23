@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Layers, Eye, FileSpreadsheet, Gift, Award, Plus, Calendar, X, ShieldAlert, BadgeCheck, Star, Sparkles, TrendingUp, CheckCircle } from 'lucide-react';
+import { Layers, Eye, FileSpreadsheet, Gift, Award, Plus, Calendar, X, ShieldAlert, BadgeCheck, Star, Sparkles, TrendingUp, CheckCircle, Crown } from 'lucide-react';
+import UpgradeModal from '../components/UpgradeModal';
 
 // RFQ Sourcing Page
 export const RFQs = () => {
@@ -22,6 +24,17 @@ export const RFQs = () => {
   const [selectedRfq, setSelectedRfq] = useState(null);
   const [rfqQuotations, setRfqQuotations] = useState([]);
 
+  // Subscription state & Upgrade modal
+  const [subData, setSubData] = useState(null);
+  const [upgradeModal, setUpgradeModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    featureName: '',
+    maxLimit: 0,
+    currentCount: 0
+  });
+
   // RFQ creation form
   const [selectedPrId, setSelectedPrId] = useState('');
   const [rfqTitle, setRfqTitle] = useState('');
@@ -33,6 +46,17 @@ export const RFQs = () => {
   const [bidDeliveryDays, setBidDeliveryDays] = useState(7);
   const [bidRemarks, setBidRemarks] = useState('');
   const [bidTotal, setBidTotal] = useState(0.00);
+
+  // Fetch subscription details and quota usage
+  const fetchSubData = async () => {
+    if (user.role === 'Vendor') return;
+    try {
+      const res = await api.get('/api/subscriptions/current');
+      setSubData(res.data);
+    } catch (err) {
+      console.error('Failed fetching subscription data:', err);
+    }
+  };
 
   // Fetch RFQ list
   const fetchRfqs = async () => {
@@ -65,6 +89,7 @@ export const RFQs = () => {
   useEffect(() => {
     fetchRfqs();
     loadSourcingDependencies();
+    fetchSubData();
   }, [user]);
 
   // Auto-fill title when a PR is selected
@@ -103,8 +128,21 @@ export const RFQs = () => {
       setInvitedVendorIds([]);
       fetchRfqs();
       loadSourcingDependencies();
+      fetchSubData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to publish RFQ.');
+      if (err.response?.status === 403 && (err.response?.data?.quotaReached || err.response?.data?.upgradeRequired)) {
+        setShowCreateModal(false);
+        setUpgradeModal({
+          isOpen: true,
+          title: err.response.data.error || 'RFQ Quota Limit Reached',
+          message: err.response.data.message || 'You have reached your monthly RFQ limit. Upgrade to a Premium plan for higher limits.',
+          featureName: 'RFQ Sourcing',
+          maxLimit: err.response.data.maxRfqs,
+          currentCount: err.response.data.currentCount
+        });
+      } else {
+        setError(err.response?.data?.error || 'Failed to publish RFQ.');
+      }
     }
   };
 
@@ -175,7 +213,18 @@ export const RFQs = () => {
       setRfqQuotations(res.data);
       setShowCompareModal(true);
     } catch (err) {
-      console.error(err);
+      if (err.response?.status === 403 && err.response?.data?.upgradeRequired) {
+        setUpgradeModal({
+          isOpen: true,
+          title: err.response.data.error || 'Premium Feature Locked',
+          message: err.response.data.message || 'AI Vendor Recommendation & Scoring requires a Professional or Enterprise Subscription Plan.',
+          featureName: 'AI Vendor Recommendation & Scoring',
+          maxLimit: 0,
+          currentCount: 0
+        });
+      } else {
+        console.error(err);
+      }
     }
   };
 
@@ -202,10 +251,32 @@ export const RFQs = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
-          <h1 className="page-title">Sourcing & Bidding</h1>
-          <p className="page-subtitle">Manage supplier requests for quotations (RFQs), gather proposals, and award contracts.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h1 className="page-title" style={{ margin: 0 }}>Sourcing & Bidding</h1>
+            {user.role !== 'Vendor' && subData && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--card-item-bg)',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.8rem'
+              }}>
+                <Crown size={14} style={{ color: subData.plan === 'Starter' ? 'var(--primary)' : 'var(--warning)' }} />
+                <span><strong>{subData.planName} Quota:</strong> {subData.usage?.rfqsThisMonth} / {subData.usage?.maxRfqs === -1 ? '∞' : subData.usage?.maxRfqs} RFQs used</span>
+                {subData.plan === 'Starter' && (
+                  <Link to="/subscriptions" style={{ color: 'var(--primary)', fontWeight: '600', marginLeft: '0.25rem', textDecoration: 'none' }}>
+                    Upgrade
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>Manage supplier requests for quotations (RFQs), gather proposals, and award contracts.</p>
         </div>
         {user.role !== 'Vendor' && (
           <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
@@ -801,6 +872,16 @@ export const RFQs = () => {
           </div>
         </div>
       )}
+
+      <UpgradeModal
+        isOpen={upgradeModal.isOpen}
+        onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}
+        title={upgradeModal.title}
+        message={upgradeModal.message}
+        featureName={upgradeModal.featureName}
+        maxLimit={upgradeModal.maxLimit}
+        currentCount={upgradeModal.currentCount}
+      />
     </div>
   );
 };

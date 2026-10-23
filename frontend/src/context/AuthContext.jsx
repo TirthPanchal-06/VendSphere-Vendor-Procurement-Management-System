@@ -34,6 +34,24 @@ export const AuthProvider = ({ children }) => {
     (error) => Promise.reject(error)
   );
 
+  // Auto handle expired/invalid session tokens
+  api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.response && (error.response.status === 401 || (error.response.status === 404 && error.response.data?.error?.includes('User profile not found')))) {
+        localStorage.removeItem('vendsphere_token');
+        localStorage.removeItem('vendsphere_user');
+        localStorage.removeItem('vendsphere_tenant_id');
+        localStorage.removeItem('vendsphere_tenant_info');
+        setToken(null);
+        setUser(null);
+        setTenantId('');
+        setTenantInfo(null);
+      }
+      return Promise.reject(error);
+    }
+  );
+
   useEffect(() => {
     // Load initial authorization states from storage (runs only once on mount)
     const storedToken = localStorage.getItem('vendsphere_token');

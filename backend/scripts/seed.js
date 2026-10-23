@@ -50,19 +50,78 @@ const seedDatabase = async () => {
     console.log('Creating global public registry tables...');
     await client.query(migrationSql);
 
+    // Seed Subscription Plans Catalog
+    console.log('Seeding subscription plans catalog...');
+    const plans = [
+      { id: 'starter', name: 'Starter', desc: 'Essential procurement tools for growing teams & small businesses.', p_monthly: 0, p_yearly: 0, max_rfq: 5, max_pr: 2, max_vendors: 3, ai: false, branding: false, priority: false },
+      { id: 'professional', name: 'Professional', desc: 'Advanced procurement features with AI Vendor Matching & higher limits.', p_monthly: 4999, p_yearly: 47990, max_rfq: 50, max_pr: 200, max_vendors: -1, ai: true, branding: true, priority: true },
+      { id: 'enterprise', name: 'Enterprise', desc: 'Unlimited capacity, full AI suite, custom workflows, & dedicated account manager.', p_monthly: 14999, p_yearly: 143990, max_rfq: -1, max_pr: -1, max_vendors: -1, ai: true, branding: true, priority: true }
+    ];
+
+    for (const p of plans) {
+      await client.query(
+        `INSERT INTO public.subscription_plans 
+         (id, name, description, price_monthly, price_yearly, max_rfqs_per_month, max_pr_per_month, max_vendors, ai_matching_enabled, custom_branding_enabled, priority_support, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
+         ON CONFLICT (id) DO UPDATE SET 
+           name = EXCLUDED.name, description = EXCLUDED.description, price_monthly = EXCLUDED.price_monthly, price_yearly = EXCLUDED.price_yearly, max_pr_per_month = EXCLUDED.max_pr_per_month, max_vendors = EXCLUDED.max_vendors`,
+        [p.id, p.name, p.desc, p.p_monthly, p.p_yearly, p.max_rfq, p.max_pr, p.max_vendors, p.ai, p.branding, p.priority]
+      );
+    }
+
     // 2. Define Tenant Onboarding Helper
-    const onboardTenant = async (id, name, subdomain) => {
-      console.log(`Onboarding tenant: ${name} (${id})...`);
+    const onboardTenant = async (id, name, subdomain, planName = 'Enterprise', cycle = 'monthly') => {
+      console.log(`Onboarding tenant: ${name} (${id}) on ${planName} plan...`);
       
       // Clean previous run
       await client.query(`DROP SCHEMA IF EXISTS "tenant_${id}" CASCADE;`);
       await client.query('DELETE FROM public.global_users WHERE tenant_id = $1', [id]);
       await client.query('DELETE FROM public.tenants WHERE id = $1', [id]);
 
-      // Insert tenant
+      const now = new Date();
+      const end = new Date(now);
+      if (cycle === 'yearly') end.setFullYear(end.getFullYear() + 1);
+      else end.setMonth(end.getMonth() + 1);
+
+      // Insert tenant with subscription details
       await client.query(
-        'INSERT INTO public.tenants (id, name, subdomain, plan, status) VALUES ($1, $2, $3, $4, $5)',
-        [id, name, subdomain, 'Enterprise', 'Active']
+        `INSERT INTO public.tenants 
+         (id, name, subdomain, plan, status, billing_cycle, subscription_status, autopay_enabled, current_period_start, current_period_end) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, name, subdomain, planName, 'Active', cycle, 'active', true, now, end]
+      );
+
+      // Insert initial subscription record
+      const pId = planName.toLowerCase();
+      const pRow = plans.find(p => p.id === pId) || plans[2];
+      const amount = cycle === 'yearly' ? pRow.p_yearly : pRow.p_monthly;
+      const tax = amount * 0.18;
+      const total = amount + tax;
+
+      const subRes = await client.query(
+        `INSERT INTO public.subscriptions 
+         (tenant_id, plan_id, billing_cycle, status, amount, tax_amount, total_amount, autopay_enabled, start_date, end_date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9)
+         RETURNING id`,
+        [id, pId, cycle, 'active', amount, tax, total, now, end]
+      );
+
+      // Insert initial invoice record
+      const invNum = `INV-INIT-${id.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const invRes = await client.query(
+        `INSERT INTO public.invoices
+         (invoice_number, tenant_id, subscription_id, plan_name, billing_cycle, amount, tax_amount, total_amount, status, payment_method, transaction_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id`,
+        [invNum, id, subRes.rows[0].id, `${planName} Plan`, cycle, amount, tax, total, 'paid', 'UPI / Google Pay', `TXN_INIT_${id.toUpperCase()}`]
+      );
+
+      // Insert initial payment log
+      await client.query(
+        `INSERT INTO public.payment_history
+         (tenant_id, invoice_id, payment_gateway, transaction_id, payment_method, amount, status, signature, raw_details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, invRes.rows[0].id, 'VendSphere Secure Pay', `TXN_INIT_${id.toUpperCase()}`, 'UPI / Google Pay', total, 'success', 'SEED_HMAC_VERIFIED_SIGNATURE', JSON.stringify({ note: 'Initial seed transaction' })]
       );
 
       // Create schema & tables
@@ -156,9 +215,10 @@ const seedDatabase = async () => {
       console.log(`Tenant ${name} database seeded successfully.`);
     };
 
-    // 3. Seed Acme Corp & Beta Tech
-    await onboardTenant('acme', 'Acme Corp', 'acme');
-    await onboardTenant('beta', 'Beta Tech', 'beta');
+    // 3. Seed Acme Corp, Beta Tech & Nova Labs (Freemium)
+    await onboardTenant('acme', 'Acme Corp', 'acme', 'Enterprise', 'yearly');
+    await onboardTenant('beta', 'Beta Tech', 'beta', 'Professional', 'monthly');
+    await onboardTenant('nova', 'Nova Labs', 'nova', 'Starter', 'monthly');
 
     // ========================================================
     // SECTION 3: SAAS DATA ISOLATION VERIFICATION SANITY CHECK

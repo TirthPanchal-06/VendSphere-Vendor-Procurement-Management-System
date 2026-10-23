@@ -1,5 +1,6 @@
 import express from 'express';
 import { auth, authorize } from '../middleware/authMiddleware.js';
+import { checkVendorLimit, syncSubscriptionStatus } from '../middleware/subscriptionMiddleware.js';
 
 const router = express.Router();
 
@@ -33,8 +34,8 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// POST /api/vendors - Add vendor manually
-router.post('/', auth, authorize('Admin', 'Company Admin', 'Procurement Manager'), async (req, res) => {
+// POST /api/vendors - Add vendor manually (guarded by vendor subscription limit)
+router.post('/', auth, authorize('Admin', 'Company Admin', 'Procurement Manager'), checkVendorLimit, async (req, res) => {
   const { name, contactName, email, phone, category, paymentTerms } = req.body;
 
   if (!name || !email) {
@@ -66,6 +67,27 @@ router.put('/:id', auth, authorize('Admin', 'Company Admin', 'Procurement Manage
     const checkRes = await req.db.query('SELECT * FROM vendors WHERE id = $1', [id]);
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ error: 'Vendor not found.' });
+    }
+
+    const currentVendor = checkRes.rows[0];
+
+    // If activating an inactive/pending vendor, enforce max approved vendor limit
+    if (status === 'Active' && currentVendor.status !== 'Active') {
+      const sub = await syncSubscriptionStatus(req.tenantId);
+      if (sub && sub.max_vendors !== -1 && sub.max_vendors !== null) {
+        const countRes = await req.db.query("SELECT COUNT(*) FROM vendors WHERE status = 'Active'");
+        const activeCount = parseInt(countRes.rows[0].count, 10);
+        if (activeCount >= sub.max_vendors) {
+          return res.status(403).json({
+            error: 'Approved Vendor Limit Reached',
+            message: `Your ${sub.plan || 'Free Starter'} plan allows up to ${sub.max_vendors} active/approved vendors. Please upgrade to a Premium plan to approve more vendors.`,
+            quotaReached: true,
+            upgradeRequired: true,
+            maxVendors: sub.max_vendors,
+            currentCount: activeCount
+          });
+        }
+      }
     }
 
     const updated = await req.db.query(

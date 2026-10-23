@@ -1,5 +1,6 @@
 import express from 'express';
 import { auth, authorize } from '../middleware/authMiddleware.js';
+import { checkPrLimit } from '../middleware/subscriptionMiddleware.js';
 
 const router = express.Router();
 
@@ -96,8 +97,8 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// POST /api/purchase-requests - Create a new request in Draft mode
-router.post('/', auth, authorize('Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee'), async (req, res) => {
+// POST /api/purchase-requests - Create a new request in Draft mode (with freemium PR limit enforcement)
+router.post('/', auth, authorize('Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee'), checkPrLimit, async (req, res) => {
   const { title, description, items, totalEstimatedCost } = req.body;
 
   if (!title || !items || !Array.isArray(items) || items.length === 0 || !totalEstimatedCost) {

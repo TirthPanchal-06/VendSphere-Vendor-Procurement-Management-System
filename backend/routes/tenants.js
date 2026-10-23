@@ -51,10 +51,10 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email address is already registered in the system.' });
     }
 
-    // 3. Register tenant in global catalog
+    // 3. Register tenant in global catalog with default Starter (Freemium) plan
     await client.query(
       'INSERT INTO public.tenants (id, name, subdomain, plan, status) VALUES ($1, $2, $3, $4, $5)',
-      [tenantId, companyName, cleanSubdomain, 'Enterprise', 'Active']
+      [tenantId, companyName, cleanSubdomain, 'Starter', 'Active']
     );
 
     // 4. Create separate schema for tenant

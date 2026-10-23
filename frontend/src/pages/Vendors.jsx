@@ -1,12 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Star, Award, UserCheck, UserX, Plus, Edit3, X, AlertCircle } from 'lucide-react';
+import { Star, Award, UserCheck, UserX, Plus, Edit3, X, AlertCircle, Crown } from 'lucide-react';
+import UpgradeModal from '../components/UpgradeModal';
 
 export const Vendors = () => {
   const { api, user } = useAuth();
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Subscription state & Upgrade modal
+  const [subData, setSubData] = useState(null);
+  const [upgradeModal, setUpgradeModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    featureName: '',
+    maxLimit: 0,
+    currentCount: 0
+  });
 
   // Modals Toggles
   const [showAddModal, setShowAddModal] = useState(false);
@@ -25,6 +38,16 @@ export const Vendors = () => {
   const [evalScore, setEvalScore] = useState(100);
   const [evalRating, setEvalRating] = useState(5.0);
 
+  const fetchSubData = async () => {
+    if (user.role === 'Vendor') return;
+    try {
+      const res = await api.get('/api/subscriptions/current');
+      setSubData(res.data);
+    } catch (err) {
+      console.error('Failed fetching subscription data:', err);
+    }
+  };
+
   const fetchVendors = async () => {
     try {
       const res = await api.get('/api/vendors');
@@ -39,6 +62,7 @@ export const Vendors = () => {
 
   useEffect(() => {
     fetchVendors();
+    fetchSubData();
   }, []);
 
   const handleAddVendor = async (e) => {
@@ -63,8 +87,21 @@ export const Vendors = () => {
       setCategory('');
       setPaymentTerms('Net 30');
       fetchVendors();
+      fetchSubData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to onboard vendor.');
+      if (err.response?.status === 403 && (err.response?.data?.quotaReached || err.response?.data?.upgradeRequired)) {
+        setShowAddModal(false);
+        setUpgradeModal({
+          isOpen: true,
+          title: err.response.data.error || 'Approved Vendor Limit Reached',
+          message: err.response.data.message || 'You have reached your active vendor limit. Upgrade to a Premium plan to approve more vendors.',
+          featureName: 'Approved Vendors',
+          maxLimit: err.response.data.maxVendors,
+          currentCount: err.response.data.currentCount
+        });
+      } else {
+        setError(err.response?.data?.error || 'Failed to onboard vendor.');
+      }
     }
   };
 
@@ -72,8 +109,20 @@ export const Vendors = () => {
     try {
       await api.put(`/api/vendors/${vendorId}`, { status });
       fetchVendors();
+      fetchSubData();
     } catch (err) {
-      console.error('Failed to change status:', err);
+      if (err.response?.status === 403 && (err.response?.data?.quotaReached || err.response?.data?.upgradeRequired)) {
+        setUpgradeModal({
+          isOpen: true,
+          title: err.response.data.error || 'Approved Vendor Limit Reached',
+          message: err.response.data.message || 'Your plan allows up to 3 active/approved vendors. Upgrade to a Premium plan to approve more vendors.',
+          featureName: 'Approved Vendors',
+          maxLimit: err.response.data.maxVendors,
+          currentCount: err.response.data.currentCount
+        });
+      } else {
+        console.error('Failed to change status:', err);
+      }
     }
   };
 
@@ -96,10 +145,32 @@ export const Vendors = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
-          <h1 className="page-title">Supplier Directory</h1>
-          <p className="page-subtitle">Manage onboarded corporate suppliers, track metrics, and run scorecard audits.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h1 className="page-title" style={{ margin: 0 }}>Supplier Directory</h1>
+            {user.role !== 'Vendor' && subData && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--card-item-bg)',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.8rem'
+              }}>
+                <Crown size={14} style={{ color: subData.plan === 'Starter' ? 'var(--primary)' : 'var(--warning)' }} />
+                <span><strong>{subData.planName} Quota:</strong> {subData.usage?.activeVendors} / {subData.usage?.maxVendors === -1 ? '∞' : subData.usage?.maxVendors} Approved Vendors</span>
+                {subData.plan === 'Starter' && (
+                  <Link to="/subscriptions" style={{ color: 'var(--primary)', fontWeight: '600', marginLeft: '0.25rem', textDecoration: 'none' }}>
+                    Upgrade
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>Manage onboarded corporate suppliers, track metrics, and run scorecard audits.</p>
         </div>
 
         {user.role !== 'Employee' && (
@@ -331,6 +402,16 @@ export const Vendors = () => {
           </div>
         </div>
       )}
+
+      <UpgradeModal
+        isOpen={upgradeModal.isOpen}
+        onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}
+        title={upgradeModal.title}
+        message={upgradeModal.message}
+        featureName={upgradeModal.featureName}
+        maxLimit={upgradeModal.maxLimit}
+        currentCount={upgradeModal.currentCount}
+      />
     </div>
   );
 };

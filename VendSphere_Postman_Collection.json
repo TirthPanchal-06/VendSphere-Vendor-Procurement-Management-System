@@ -1,0 +1,462 @@
+{
+	"info": {
+		"_postman_id": "vendsphere-api-collection-v1",
+		"name": "VendSphere API Collection",
+		"description": "Postman Collection for testing VendSphere Multi-Tenant Vendor & Procurement Management SaaS API endpoints.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "tenantId",
+			"value": "acme",
+			"type": "string"
+		},
+		{
+			"key": "authToken",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. System & Health",
+			"item": [
+				{
+					"name": "API Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"health"
+							]
+						},
+						"description": "Checks backend API and PostgreSQL database connectivity."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Tenant & Auth",
+			"item": [
+				{
+					"name": "Register New Tenant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"companyName\": \"Acme Corp\",\n  \"subdomain\": \"acme\",\n  \"adminName\": \"Admin User\",\n  \"adminEmail\": \"admin@acme.com\",\n  \"adminPassword\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tenants/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tenants",
+								"register"
+							]
+						},
+						"description": "Onboards a new tenant company, creates dedicated database schema, and initializes Admin user."
+					},
+					"response": []
+				},
+				{
+					"name": "Tenant User Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.token) {",
+									"        pm.collectionVariables.set(\"authToken\", jsonData.token);",
+									"        console.log(\"Saved authToken to collection variable!\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@acme.com\",\n  \"password\": \"password123\",\n  \"tenantId\": \"{{tenantId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authenticates tenant user and automatically sets `authToken` in collection variables upon success."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User Context",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							]
+						},
+						"description": "Fetches current logged in user details inside the tenant environment."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Vendors",
+			"item": [
+				{
+					"name": "List All Vendors",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/vendors",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"vendors"
+							]
+						},
+						"description": "Fetch list of registered vendors."
+					},
+					"response": []
+				},
+				{
+					"name": "Create New Vendor",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Apex Tech Solutions\",\n  \"contact_person\": \"Sarah Connor\",\n  \"email\": \"contact@apextech.com\",\n  \"phone\": \"+1 555-0199\",\n  \"category\": \"IT Equipment\",\n  \"address\": \"123 Tech Lane, Silicon Valley, CA\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/vendors",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"vendors"
+							]
+						},
+						"description": "Create a new vendor profile."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Purchase Requests & RFQs",
+			"item": [
+				{
+					"name": "List Purchase Requests",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/purchase-requests",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"purchase-requests"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Purchase Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Laptops for New Engineering Team\",\n  \"department\": \"Engineering\",\n  \"priority\": \"High\",\n  \"estimated_total\": 4500,\n  \"items\": [\n    {\n      \"item_name\": \"Developer Workstation Laptop\",\n      \"quantity\": 3,\n      \"estimated_unit_price\": 1500\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/purchase-requests",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"purchase-requests"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List RFQs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/rfqs",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"rfqs"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5. Purchase Orders",
+			"item": [
+				{
+					"name": "List Purchase Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/purchase-orders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"purchase-orders"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "6. Dashboard & Subscriptions",
+			"item": [
+				{
+					"name": "Get Dashboard Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard/stats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"dashboard",
+								"stats"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Subscription Plans",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/subscriptions/plans",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"subscriptions",
+								"plans"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current Subscription",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-tenant-id",
+								"value": "{{tenantId}}",
+								"type": "text"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/subscriptions/current",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"subscriptions",
+								"current"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

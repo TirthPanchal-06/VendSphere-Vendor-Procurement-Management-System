@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Eye, Send, CheckCircle, PackageOpen, Award, X,
   AlertCircle, Mail, FileDown, Star, CreditCard, Banknote,
-  Building2, Receipt, Printer, Download, QrCode, Lock
+  Building2, Receipt, Printer, Download, QrCode, Lock,
+  MessageSquare, CheckCircle2
 } from 'lucide-react';
+
 
 // ─── Simulated Card Form (no API key required) ──────────────────────────────
 const SimulatedCardForm = ({ amount, onSuccess, onCancel }) => {
@@ -163,10 +166,12 @@ const SimulatedCardForm = ({ amount, onSuccess, onCancel }) => {
 // ─── Main Component ─────────────────────────────────────────────────────────
 export const PurchaseOrders = () => {
   const { api, user } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [pendingBids, setPendingBids] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
 
   // Modal Controls
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -583,6 +588,27 @@ export const PurchaseOrders = () => {
                         <button onClick={() => handleViewDetails(po.id)} className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}>
                           <Eye size={12} /><span>View</span>
                         </button>
+                        {po.status === 'Completed' && (
+                          <button
+                            onClick={() => {
+                              handleViewDetails(po.id);
+                              setActiveTab('feedback');
+                            }}
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.4rem 0.75rem',
+                              fontSize: '0.75rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              borderColor: po.feedback_count > 0 ? 'var(--primary)' : 'var(--border-color)'
+                            }}
+                            title="View Feedback & Queries"
+                          >
+                            <MessageSquare size={12} />
+                            <span>{po.feedback_count > 0 ? `Feedback (${po.feedback_rating || 5}★)` : 'Feedback'}</span>
+                          </button>
+                        )}
                         {/* Payment button — visible for accepted/completed POs */}
                         {(po.status === 'Accepted' || po.status === 'Completed') && (
                           <button onClick={() => openPaymentModal(po)} className="btn btn-primary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', background: 'linear-gradient(135deg,#10b981,#059669)' }}>
@@ -625,9 +651,13 @@ export const PurchaseOrders = () => {
 
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--glass-border)', padding: '0 1.5rem', background: 'rgba(255,255,255,0.02)' }}>
-              {['details', 'emails'].map(tab => (
+              {['details', 'feedback', 'emails'].map(tab => (
                 <button key={tab} type="button" onClick={() => setActiveTab(tab)} style={{ padding: '0.85rem 1rem', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'var(--transition-fast)', textTransform: 'capitalize' }}>
-                  {tab === 'emails' ? `Dispatched Emails (${poEmails.length})` : 'Order Details'}
+                  {tab === 'emails'
+                    ? `Dispatched Emails (${poEmails.length})`
+                    : tab === 'feedback'
+                    ? `Feedback & Queries (${selectedPo.feedbackQueries?.length || 0})`
+                    : 'Order Details'}
                 </button>
               ))}
             </div>
@@ -693,6 +723,126 @@ export const PurchaseOrders = () => {
                 </>
               )}
 
+              {activeTab === 'feedback' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {(!selectedPo.feedbackQueries || selectedPo.feedbackQueries.length === 0) ? (
+                    <div style={{ padding: '2.5rem', textAlign: 'center', background: 'var(--card-item-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                      <MessageSquare size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem', opacity: 0.5 }} />
+                      <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem' }}>No Feedback or Queries Submitted</h4>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '420px', margin: '0 auto 1.25rem auto' }}>
+                        {selectedPo.status === 'Completed'
+                          ? 'This order has been delivered. Employees can evaluate supplier quality, rate the order, and submit query tickets.'
+                          : 'Feedback and queries can be filed once this order is marked Completed (Delivered).'}
+                      </p>
+                      {selectedPo.status === 'Completed' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDetailsModal(false);
+                            navigate('/queries');
+                          }}
+                          className="btn btn-primary"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <span>Submit Feedback & Query</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    selectedPo.feedbackQueries.map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          background: 'var(--card-item-bg)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '1.25rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.75rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>{item.query_subject}</span>
+                              <span className={`badge badge-${item.status.replace(/ /g, '-').toLowerCase()}`}>
+                                {item.status}
+                              </span>
+                              <span className={`badge badge-priority-${item.query_priority.toLowerCase()}`}>
+                                {item.query_priority}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              By {item.employee_name} ({item.employee_dept || 'Employee'}) &bull; {new Date(item.created_at).toLocaleDateString()}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                size={14}
+                                style={{
+                                  color: s <= item.rating ? '#f59e0b' : 'var(--text-muted)',
+                                  fill: s <= item.rating ? '#f59e0b' : 'none'
+                                }}
+                              />
+                            ))}
+                            <span style={{ fontSize: '0.75rem', fontWeight: '700', marginLeft: '4px' }}>{item.rating}/5</span>
+                          </div>
+                        </div>
+
+                        <div style={{ padding: '0.75rem', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: '2px' }}>
+                            Delivery Feedback:
+                          </span>
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: 0 }}>
+                            {item.feedback}
+                          </p>
+                        </div>
+
+                        <div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: '2px' }}>
+                            Reported Issue ({item.query_category}):
+                          </span>
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                            {item.query_description}
+                          </p>
+                        </div>
+
+                        {item.resolution_notes && (
+                          <div style={{ padding: '0.85rem', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: 'var(--radius-sm)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontWeight: '700', fontSize: '0.8rem', marginBottom: '4px' }}>
+                              <CheckCircle2 size={14} />
+                              <span>Official Resolution Response</span>
+                              {item.resolver_name && <span style={{ fontWeight: 'normal', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>by {item.resolver_name}</span>}
+                            </div>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: 0 }}>
+                              {item.resolution_notes}
+                            </p>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowDetailsModal(false);
+                              navigate('/queries');
+                            }}
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                          >
+                            Open in Feedback & Queries Portal &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
               {activeTab === 'emails' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {poEmails.length === 0 ? (
@@ -713,6 +863,7 @@ export const PurchaseOrders = () => {
                 </div>
               )}
             </div>
+
 
             <div className="modal-footer">
               <button

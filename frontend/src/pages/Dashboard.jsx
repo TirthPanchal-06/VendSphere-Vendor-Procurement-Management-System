@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   TrendingUp,
@@ -11,7 +12,7 @@ import {
   Activity,
   Calendar,
   AlertCircle,
-  Sparkles
+  MessageSquare
 } from 'lucide-react';
 
 export const Dashboard = () => {
@@ -195,12 +196,17 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-          <Sparkles size={48} style={{ color: 'var(--primary)', marginBottom: '1rem' }} />
-          <h3>Procurement Portal Access</h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.5rem', maxWidth: '300px' }}>
-            Submit purchase requests, track manager approvals, and monitor Purchase Orders in real-time.
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '1.75rem' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-sm)', background: 'rgba(37, 99, 235, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+            <MessageSquare size={24} />
+          </div>
+          <h3 style={{ fontSize: '1.05rem', margin: '0 0 0.4rem 0' }}>Post-Delivery Feedback & Queries</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem', maxWidth: '320px' }}>
+            Have goods arrived? Submit vendor performance evaluations, 5-star ratings, and track issue tickets.
           </p>
+          <Link to="/queries" className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.45rem 1rem' }}>
+            Manage Feedback & Queries
+          </Link>
         </div>
       </div>
     </div>

@@ -9,17 +9,23 @@ router.get('/', auth, async (req, res) => {
 
   try {
     let queryText = `
-      SELECT po.*, v.name as vendor_name, pr.pr_number, pr.title as pr_title
+      SELECT po.*, v.name as vendor_name, pr.pr_number, pr.title as pr_title,
+             (SELECT COUNT(*) FROM order_feedback_queries q WHERE q.purchase_order_id = po.id) as feedback_count,
+             (SELECT q.rating FROM order_feedback_queries q WHERE q.purchase_order_id = po.id ORDER BY q.created_at DESC LIMIT 1) as feedback_rating,
+             (SELECT q.status FROM order_feedback_queries q WHERE q.purchase_order_id = po.id ORDER BY q.created_at DESC LIMIT 1) as feedback_status,
+             (SELECT q.id FROM order_feedback_queries q WHERE q.purchase_order_id = po.id AND q.employee_id = $1 LIMIT 1) as my_feedback_id
       FROM purchase_orders po
       LEFT JOIN vendors v ON po.vendor_id = v.id
       LEFT JOIN purchase_requests pr ON po.purchase_request_id = pr.id
     `;
-    const queryParams = [];
+    const queryParams = [userId];
 
     if (role === 'Vendor') {
       // Vendors only see POs assigned to them
-      queryParams.push(userId);
       queryText += ' WHERE v.user_id = $1';
+    } else if (role === 'Employee') {
+      // Employees see orders linked to their PRs or completed deliveries
+      queryText += ' WHERE (pr.requester_id = $1 OR po.status = \'Completed\')';
     }
 
     queryText += ' ORDER BY po.created_at DESC';
@@ -63,11 +69,27 @@ router.get('/:id', auth, async (req, res) => {
       }
     }
 
+    // Also fetch associated feedback & queries
+    const feedbackRes = await req.db.query(
+      `SELECT q.*, emp.name as employee_name, emp.department as employee_dept,
+              assignee.name as assignee_name, resolver.name as resolver_name
+       FROM order_feedback_queries q
+       JOIN users emp ON q.employee_id = emp.id
+       LEFT JOIN users assignee ON q.assigned_to = assignee.id
+       LEFT JOIN users resolver ON q.resolved_by = resolver.id
+       WHERE q.purchase_order_id = $1
+       ORDER BY q.created_at DESC`,
+      [id]
+    );
+
+    po.feedbackQueries = feedbackRes.rows;
+
     res.json(po);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve Purchase Order details.' });
   }
 });
+
 
 // POST /api/purchase-orders - Generate Purchase Order from awarded quotation
 router.post('/', auth, authorize('Admin', 'ProcurementManager'), async (req, res) => {

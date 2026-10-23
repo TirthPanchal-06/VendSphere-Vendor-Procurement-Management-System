@@ -12,8 +12,104 @@ CREATE TABLE IF NOT EXISTS public.tenants (
   id VARCHAR(50) PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   subdomain VARCHAR(50) UNIQUE NOT NULL,
-  plan VARCHAR(20) DEFAULT 'Standard',
+  plan VARCHAR(20) DEFAULT 'Starter',
   status VARCHAR(20) DEFAULT 'Active',
+  billing_cycle VARCHAR(20) DEFAULT 'monthly',
+  subscription_status VARCHAR(20) DEFAULT 'active',
+  autopay_enabled BOOLEAN DEFAULT true,
+  current_period_start TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  current_period_end TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '1 month'),
+  cancel_at_period_end BOOLEAN DEFAULT false,
+  payment_method_type VARCHAR(50) DEFAULT 'upi',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Ensure columns exist if table was already created in an earlier migration
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(20) DEFAULT 'monthly';
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'active';
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS autopay_enabled BOOLEAN DEFAULT true;
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS current_period_start TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMP WITH TIME ZONE DEFAULT (CURRENT_TIMESTAMP + INTERVAL '1 month');
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN DEFAULT false;
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS payment_method_type VARCHAR(50) DEFAULT 'upi';
+
+-- Subscription Plans Catalog Table
+CREATE TABLE IF NOT EXISTS public.subscription_plans (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  price_monthly NUMERIC(10,2) NOT NULL,
+  price_yearly NUMERIC(10,2) NOT NULL,
+  max_rfqs_per_month INTEGER DEFAULT 5, -- -1 for unlimited
+  max_pr_per_month INTEGER DEFAULT 2, -- -1 for unlimited (2 for Starter)
+  max_vendors INTEGER DEFAULT 3, -- -1 for unlimited (3 for Starter)
+  ai_matching_enabled BOOLEAN DEFAULT false,
+  custom_branding_enabled BOOLEAN DEFAULT false,
+  priority_support BOOLEAN DEFAULT false,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE public.subscription_plans ADD COLUMN IF NOT EXISTS max_vendors INTEGER DEFAULT 3;
+
+-- Subscriptions History Table
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id VARCHAR(50) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  plan_id VARCHAR(50) REFERENCES public.subscription_plans(id),
+  billing_cycle VARCHAR(20) NOT NULL, -- 'monthly', 'yearly'
+  status VARCHAR(20) NOT NULL, -- 'active', 'expired', 'cancelled', 'past_due'
+  amount NUMERIC(10,2) NOT NULL,
+  tax_amount NUMERIC(10,2) NOT NULL,
+  total_amount NUMERIC(10,2) NOT NULL,
+  autopay_enabled BOOLEAN DEFAULT true,
+  start_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  end_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Invoices Table
+CREATE TABLE IF NOT EXISTS public.invoices (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  invoice_number VARCHAR(50) UNIQUE NOT NULL,
+  tenant_id VARCHAR(50) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  subscription_id UUID REFERENCES public.subscriptions(id) ON DELETE SET NULL,
+  plan_name VARCHAR(100) NOT NULL,
+  billing_cycle VARCHAR(20) NOT NULL,
+  amount NUMERIC(10,2) NOT NULL,
+  tax_amount NUMERIC(10,2) NOT NULL,
+  discount_amount NUMERIC(10,2) DEFAULT 0.00,
+  total_amount NUMERIC(10,2) NOT NULL,
+  status VARCHAR(20) DEFAULT 'paid', -- 'paid', 'pending', 'failed', 'refunded'
+  payment_method VARCHAR(50) NOT NULL, -- 'UPI / Google Pay', 'Credit/Debit Card'
+  transaction_id VARCHAR(100) NOT NULL,
+  billing_address JSONB,
+  issued_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  due_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Payment History Log Table
+CREATE TABLE IF NOT EXISTS public.payment_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id VARCHAR(50) REFERENCES public.tenants(id) ON DELETE CASCADE,
+  invoice_id UUID REFERENCES public.invoices(id) ON DELETE CASCADE,
+  payment_gateway VARCHAR(50) DEFAULT 'VendSphere Secure Pay',
+  transaction_id VARCHAR(100) NOT NULL,
+  payment_method VARCHAR(50) NOT NULL, -- 'UPI / Google Pay', 'Credit/Debit Card'
+  amount NUMERIC(10,2) NOT NULL,
+  status VARCHAR(20) NOT NULL, -- 'success', 'failed', 'pending'
+  signature VARCHAR(255) NOT NULL,
+  raw_details JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Webhook Audit Log Table
+CREATE TABLE IF NOT EXISTS public.webhook_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_type VARCHAR(100) NOT NULL,
+  payload JSONB NOT NULL,
+  signature VARCHAR(255) NOT NULL,
+  processed BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -26,6 +122,7 @@ CREATE TABLE IF NOT EXISTS public.global_users (
   role VARCHAR(50) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
 
 
 -- ========================================================
@@ -174,3 +271,36 @@ CREATE TABLE IF NOT EXISTS simulated_emails (
   body TEXT NOT NULL,
   sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Employee Feedback & Queries on Delivered Purchase Orders
+CREATE TABLE IF NOT EXISTS order_feedback_queries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  employee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  feedback TEXT NOT NULL,
+  query_subject VARCHAR(255) NOT NULL,
+  query_category VARCHAR(100) NOT NULL,
+  query_priority VARCHAR(50) DEFAULT 'Medium',
+  query_description TEXT NOT NULL,
+  status VARCHAR(50) DEFAULT 'Open',
+  assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolution_notes TEXT,
+  resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Query Activity Timeline & Responses
+CREATE TABLE IF NOT EXISTS query_activities (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  query_id UUID NOT NULL REFERENCES order_feedback_queries(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action_type VARCHAR(50) NOT NULL,
+  notes TEXT,
+  previous_status VARCHAR(50),
+  new_status VARCHAR(50),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+

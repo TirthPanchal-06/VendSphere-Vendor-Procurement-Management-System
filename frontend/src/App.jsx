@@ -14,6 +14,8 @@ import Workflows from './pages/Workflows';
 import RFQs from './pages/RFQs';
 import PurchaseOrders from './pages/PurchaseOrders';
 import Users from './pages/Users';
+import Subscriptions from './pages/Subscriptions';
+import Queries from './pages/Queries';
 
 // Auth Guard for Private Routes
 const PrivateRoute = ({ children, allowedRoles }) => {
@@ -70,7 +72,15 @@ const AppLayout = () => {
             } />
             
             <Route path="/purchase-orders" element={
-              <PrivateRoute allowedRoles={['Admin', 'ProcurementManager', 'Manager', 'Vendor']}><PurchaseOrders /></PrivateRoute>
+              <PrivateRoute allowedRoles={['Admin', 'ProcurementManager', 'Manager', 'Employee', 'Vendor']}><PurchaseOrders /></PrivateRoute>
+            } />
+
+            <Route path="/queries" element={
+              <PrivateRoute allowedRoles={['Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee']}><Queries /></PrivateRoute>
+            } />
+
+            <Route path="/subscriptions" element={
+              <PrivateRoute allowedRoles={['Admin', 'Company Admin', 'ProcurementManager', 'Manager']}><Subscriptions /></PrivateRoute>
             } />
 
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

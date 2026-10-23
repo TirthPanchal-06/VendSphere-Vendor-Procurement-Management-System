@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Bell, Check, Inbox, Sun, Moon } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Bell, Check, Inbox, Sun, Moon, Crown } from 'lucide-react';
 
 export const Navbar = () => {
   const { user, tenantInfo, api } = useAuth();
@@ -9,6 +10,7 @@ export const Navbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [subPlan, setSubPlan] = useState('');
   const dropdownRef = useRef(null);
 
   const fetchNotifications = async () => {
@@ -22,9 +24,21 @@ export const Navbar = () => {
     }
   };
 
+  const fetchSubscriptionBadge = async () => {
+    if (!user) return;
+    try {
+      const res = await api.get('/api/subscriptions/current');
+      if (res.data?.planName) {
+        setSubPlan(res.data.planName);
+      }
+    } catch (error) {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
-    // Poll notifications every 10 seconds for a real-time reactive feel
+    fetchSubscriptionBadge();
     const interval = setInterval(fetchNotifications, 10000);
     return () => clearInterval(interval);
   }, [user]);
@@ -77,13 +91,23 @@ export const Navbar = () => {
       top: 0,
       zIndex: 9
     }}>
-      <div>
-        <h4 style={{ margin: 0, fontWeight: '700', color: 'var(--text-primary)' }}>
-          {tenantInfo?.name || 'Company Portal'}
-        </h4>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-          {tenantInfo?.subdomain}.vendsphere.com
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div>
+          <h4 style={{ margin: 0, fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span>{tenantInfo?.name || 'Company Portal'}</span>
+            {subPlan && (
+              <Link to="/subscriptions" style={{ textDecoration: 'none' }}>
+                <span className="badge badge-active" style={{ fontSize: '0.65rem', padding: '0.2rem 0.5rem', cursor: 'pointer' }}>
+                  <Crown size={10} style={{ marginRight: '3px' }} />
+                  {subPlan}
+                </span>
+              </Link>
+            )}
+          </h4>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            {tenantInfo?.subdomain}.vendsphere.com
+          </span>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }} ref={dropdownRef}>

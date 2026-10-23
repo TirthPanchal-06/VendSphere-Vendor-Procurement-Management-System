@@ -131,43 +131,15 @@ export const Login = () => {
       justifyContent: 'center',
       minHeight: '100vh',
       padding: '2rem',
-      background: 'radial-gradient(circle at center, var(--bg-secondary) 0%, var(--bg-primary) 100%)',
-      position: 'relative',
-      overflow: 'hidden'
+      background: 'var(--bg-primary)'
     }}>
-      {/* Decorative background glows */}
-      <div style={{
-        position: 'absolute',
-        top: '10%',
-        left: '20%',
-        width: '400px',
-        height: '400px',
-        borderRadius: '50%',
-        background: 'var(--login-glow-1)',
-        filter: 'blur(100px)',
-        zIndex: 0
-      }} />
-      <div style={{
-        position: 'absolute',
-        bottom: '10%',
-        right: '20%',
-        width: '400px',
-        height: '400px',
-        borderRadius: '50%',
-        background: 'var(--login-glow-2)',
-        filter: 'blur(100px)',
-        zIndex: 0
-      }} />
-
       <div className="glass-panel" style={{
         width: '100%',
         maxWidth: formMode === 'login' ? '480px' : '650px',
-        position: 'relative',
-        zIndex: 1,
-        border: '1px solid var(--glass-border)',
-        background: 'var(--bg-glass)',
-        boxShadow: 'var(--shadow-lg)',
-        padding: '3rem'
+        border: '1px solid var(--border-color)',
+        background: 'var(--bg-secondary)',
+        boxShadow: 'var(--shadow-md)',
+        padding: '2.5rem'
       }}>
         {/* Brand Logo */}
         <div style={{
@@ -178,31 +150,29 @@ export const Login = () => {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '60px',
-            height: '60px',
-            borderRadius: 'var(--radius-md)',
-            background: 'linear-gradient(135deg, var(--primary), var(--accent))',
+            width: '54px',
+            height: '54px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--primary)',
             color: '#fff',
-            marginBottom: '1rem',
-            boxShadow: '0 8px 24px var(--primary-glow)'
+            marginBottom: '1rem'
           }}>
-            {formMode === 'register_vendor' ? <Truck size={32} /> : <Building2 size={32} />}
+            {formMode === 'register_vendor' ? <Truck size={28} /> : <Building2 size={28} />}
           </div>
           <h2 style={{
-            fontSize: '2rem',
-            background: 'linear-gradient(135deg, var(--text-primary) 40%, var(--accent))',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            fontSize: '1.75rem',
+            fontWeight: '700',
+            color: 'var(--text-primary)',
             margin: 0
           }}>
             VendSphere
           </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
             {formMode === 'onboard_company'
               ? 'Onboard your company onto the procurement cloud'
               : formMode === 'register_vendor'
                 ? 'Register your supplier business profile'
-                : 'SaaS Procurement & Vendor Portal'}
+                : 'Enterprise Procurement & Vendor Portal'}
           </p>
         </div>
 
@@ -290,6 +260,47 @@ export const Login = () => {
                   style={{ background: 'none', border: 'none', color: '#10b981', fontWeight: '700', cursor: 'pointer', padding: 0 }}
                 >
                   Register Vendor
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Demo Fill Helper */}
+            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--glass-border)', textAlign: 'center' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 'bold', display: 'block', marginBottom: '0.75rem' }}>
+                ⚡ Quick Demo One-Click Fill
+              </span>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => { setLoginTenantId('nova'); setLoginEmail('admin@nova.com'); setLoginPassword('password123'); }}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                >
+                  Nova (Starter Plan)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginTenantId('acme'); setLoginEmail('admin@acme.com'); setLoginPassword('password123'); }}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                >
+                  Acme Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginTenantId('acme'); setLoginEmail('procurement@acme.com'); setLoginPassword('password123'); }}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                >
+                  Acme Purchaser
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginTenantId('beta'); setLoginEmail('admin@beta.com'); setLoginPassword('password123'); }}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                >
+                  Beta Admin
                 </button>
               </div>
             </div>

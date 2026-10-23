@@ -9,8 +9,10 @@ import {
   FileText,
   Layers,
   ShoppingBag,
+  CreditCard,
   LogOut,
-  Building2
+  Building2,
+  MessageSquare
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -29,8 +31,11 @@ export const Sidebar = () => {
       { to: '/workflows', label: 'Approval Workflows', icon: GitMerge, roles: ['Admin', 'Company Admin'] },
       { to: '/users', label: 'User Directory', icon: Users, roles: ['Admin', 'Company Admin'] },
       { to: '/rfqs', label: 'Sourcing (RFQs)', icon: Layers, roles: ['Admin', 'ProcurementManager', 'Vendor'] },
-      { to: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingBag, roles: ['Admin', 'ProcurementManager', 'Manager', 'Vendor'] },
+      { to: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingBag, roles: ['Admin', 'ProcurementManager', 'Manager', 'Employee', 'Vendor'] },
+      { to: '/queries', label: 'Feedback & Queries', icon: MessageSquare, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee'] },
+      { to: '/subscriptions', label: 'Subscription & Billing', icon: CreditCard, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager'] },
     ];
+
 
     return links.filter(link => link.roles.includes(role));
   };
@@ -38,7 +43,7 @@ export const Sidebar = () => {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <Building2 size={28} style={{ color: '#6366f1' }} />
+        <Building2 size={26} style={{ color: 'var(--primary)' }} />
         <span>VendSphere</span>
       </div>
 

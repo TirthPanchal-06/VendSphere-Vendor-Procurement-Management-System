@@ -1,12 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plus, X, Eye, FileText, CheckCircle2, XCircle, ChevronRight, AlertCircle, ArrowUpRight } from 'lucide-react';
+import { Plus, X, Eye, FileText, CheckCircle2, XCircle, ChevronRight, AlertCircle, ArrowUpRight, Crown } from 'lucide-react';
+import UpgradeModal from '../components/UpgradeModal';
 
 export const PurchaseRequests = () => {
   const { api, user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Subscription state & Upgrade Modal
+  const [subData, setSubData] = useState(null);
+  const [upgradeModal, setUpgradeModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    featureName: '',
+    maxLimit: 0,
+    currentCount: 0
+  });
 
   // Tab control for Managers / Admins to filter their pending approval queue
   const [activeTab, setActiveTab] = useState('all'); // 'all' or 'pending'
@@ -25,6 +38,16 @@ export const PurchaseRequests = () => {
   // Approval Form States
   const [comments, setComments] = useState('');
 
+  const fetchSubData = async () => {
+    if (user.role === 'Vendor') return;
+    try {
+      const res = await api.get('/api/subscriptions/current');
+      setSubData(res.data);
+    } catch (err) {
+      console.error('Failed fetching subscription data:', err);
+    }
+  };
+
   const fetchRequests = async () => {
     try {
       const res = await api.get('/api/purchase-requests');
@@ -39,6 +62,7 @@ export const PurchaseRequests = () => {
 
   useEffect(() => {
     fetchRequests();
+    fetchSubData();
   }, []);
 
   // Calculate total cost when items change
@@ -80,8 +104,21 @@ export const PurchaseRequests = () => {
       setDescription('');
       setItems([{ name: '', category: 'Hardware', quantity: 1, estimated_cost: 0.00 }]);
       fetchRequests();
+      fetchSubData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to submit purchase request.');
+      if (err.response?.status === 403 && (err.response?.data?.quotaReached || err.response?.data?.upgradeRequired)) {
+        setShowCreateModal(false);
+        setUpgradeModal({
+          isOpen: true,
+          title: err.response.data.error || 'PR Quota Limit Reached',
+          message: err.response.data.message || 'You have reached your monthly Purchase Request limit. Upgrade to a Premium plan for higher limits.',
+          featureName: 'Purchase Requisitions',
+          maxLimit: err.response.data.maxPr,
+          currentCount: err.response.data.currentCount
+        });
+      } else {
+        setError(err.response?.data?.error || 'Failed to submit purchase request.');
+      }
     }
   };
 
@@ -138,10 +175,32 @@ export const PurchaseRequests = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', width: '100%' }}>
+      <div style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', width: '100%', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
-          <h1 className="page-title">Purchase Requisitions</h1>
-          <p className="page-subtitle">Track, approve, and route purchase requests across corporate departments.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h1 className="page-title" style={{ margin: 0 }}>Purchase Requisitions</h1>
+            {user.role !== 'Vendor' && subData && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--card-item-bg)',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.8rem'
+              }}>
+                <Crown size={14} style={{ color: subData.plan === 'Starter' ? 'var(--primary)' : 'var(--warning)' }} />
+                <span><strong>{subData.planName} Quota:</strong> {subData.usage?.prsThisMonth} / {subData.usage?.maxPr === -1 ? '∞' : subData.usage?.maxPr} PRs used</span>
+                {subData.plan === 'Starter' && (
+                  <Link to="/subscriptions" style={{ color: 'var(--primary)', fontWeight: '600', marginLeft: '0.25rem', textDecoration: 'none' }}>
+                    Upgrade
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>Track, approve, and route purchase requests across corporate departments.</p>
         </div>
 
         {user.role !== 'Vendor' && (
@@ -523,6 +582,16 @@ export const PurchaseRequests = () => {
           </div>
         </div>
       )}
+
+      <UpgradeModal
+        isOpen={upgradeModal.isOpen}
+        onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}
+        title={upgradeModal.title}
+        message={upgradeModal.message}
+        featureName={upgradeModal.featureName}
+        maxLimit={upgradeModal.maxLimit}
+        currentCount={upgradeModal.currentCount}
+      />
     </div>
   );
 };

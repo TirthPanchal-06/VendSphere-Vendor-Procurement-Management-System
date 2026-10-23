@@ -1,6 +1,7 @@
 import express from 'express';
 import { auth, authorize } from '../middleware/authMiddleware.js';
 import { evaluateVendorBids } from '../services/aiEngine.js';
+import { checkRfqLimit, checkAiFeatureAccess } from '../middleware/subscriptionMiddleware.js';
 
 const router = express.Router();
 
@@ -89,8 +90,8 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Create RFQ from approved purchase request
-router.post('/', auth, authorize('Admin', 'ProcurementManager'), async (req, res) => {
+// Create RFQ from approved purchase request (with subscription limit check)
+router.post('/', auth, authorize('Admin', 'ProcurementManager'), checkRfqLimit, async (req, res) => {
   const { purchaseRequestId, title, description, deadline, items, vendorIds } = req.body;
 
   if (!purchaseRequestId || !title || !deadline || !items || !Array.isArray(items) || !vendorIds || !Array.isArray(vendorIds)) {
@@ -243,7 +244,7 @@ router.post('/:id/quotations', auth, authorize('Vendor'), async (req, res) => {
 });
 
 // List all quotations with ML evaluation scores
-router.get('/:id/quotations', auth, authorize('Admin', 'ProcurementManager'), async (req, res) => {
+router.get('/:id/quotations', auth, authorize('Admin', 'ProcurementManager'), checkAiFeatureAccess, async (req, res) => {
   const { id } = req.params;
 
   try {

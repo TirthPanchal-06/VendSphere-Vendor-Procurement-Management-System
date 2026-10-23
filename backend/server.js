@@ -13,6 +13,8 @@ import rfqRoutes from './routes/rfqs.js';
 import orderRoutes from './routes/orders.js';
 import dashboardRoutes from './routes/dashboards.js';
 import notificationRoutes from './routes/notifications.js';
+import subscriptionRoutes from './routes/subscriptions.js';
+import queryRoutes from './routes/queries.js';
 
 dotenv.config();
 
@@ -26,6 +28,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id']
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // API Health Check (Requires no tenant context)
 app.get('/api/health', async (req, res) => {
@@ -59,6 +62,9 @@ app.use('/api/rfqs', rfqRoutes);
 app.use('/api/purchase-orders', orderRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/queries', queryRoutes);
+
 
 // Global Error Handler Middleware
 app.use((err, req, res, next) => {
