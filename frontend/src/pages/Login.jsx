@@ -272,11 +272,11 @@ export const Login = () => {
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <button
                   type="button"
-                  onClick={() => { setLoginTenantId('nova'); setLoginEmail('admin@nova.com'); setLoginPassword('password123'); }}
+                  onClick={() => { setLoginTenantId('jvgroup'); setLoginEmail('tirth@gmail.com'); setLoginPassword('password123'); }}
                   className="btn btn-secondary"
                   style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
                 >
-                  Nova (Starter Plan)
+                  J.V. Group Admin
                 </button>
                 <button
                   type="button"
@@ -301,6 +301,14 @@ export const Login = () => {
                   style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
                 >
                   Beta Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginTenantId('nova'); setLoginEmail('admin@nova.com'); setLoginPassword('password123'); }}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                >
+                  Nova (Starter Plan)
                 </button>
               </div>
             </div>
