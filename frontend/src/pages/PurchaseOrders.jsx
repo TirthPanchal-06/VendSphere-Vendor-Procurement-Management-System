@@ -201,6 +201,9 @@ export const PurchaseOrders = () => {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(null);
 
+  // Financial authorization guard: Employees and Vendors cannot initiate/record payments
+  const canMakePayment = user && user.role !== 'Employee' && user.role !== 'Vendor';
+
   const fetchOrders = async () => {
     try {
       const res = await api.get('/api/purchase-orders');
@@ -474,6 +477,7 @@ export const PurchaseOrders = () => {
 
   // ── Payment Modal helpers ──────────────────────────────────────────────────
   const openPaymentModal = (po) => {
+    if (!canMakePayment) return;
     setSelectedPo(po);
     setPaymentStep('method');
     setSelectedPaymentMethod(null);
@@ -627,8 +631,8 @@ export const PurchaseOrders = () => {
                             <span>Return Items</span>
                           </button>
                         )}
-                        {/* Payment button — visible for accepted/completed POs */}
-                        {(po.status === 'Accepted' || po.status === 'Completed') && (
+                        {/* Payment button — visible for authorized financial/procurement roles (not Employee or Vendor) */}
+                        {canMakePayment && (po.status === 'Accepted' || po.status === 'Completed') && (
                           <button onClick={() => openPaymentModal(po)} className="btn btn-primary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', background: 'linear-gradient(135deg,#10b981,#059669)' }}>
                             <Receipt size={12} /><span>Pay</span>
                           </button>
@@ -1006,7 +1010,7 @@ export const PurchaseOrders = () => {
                 <FileDown size={14} />
                 <span>Export PDF Confirmation</span>
               </button>
-              {(selectedPo.status === 'Accepted' || selectedPo.status === 'Completed') && (
+              {canMakePayment && (selectedPo.status === 'Accepted' || selectedPo.status === 'Completed') && (
                 <button
                   onClick={() => { setShowDetailsModal(false); openPaymentModal(selectedPo); }}
                   className="btn btn-primary"

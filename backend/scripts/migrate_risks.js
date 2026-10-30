@@ -46,3 +46,4 @@ const runMigration = async () => {
 };
 
 runMigration();
+
