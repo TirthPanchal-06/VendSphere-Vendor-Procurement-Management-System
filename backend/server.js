@@ -15,6 +15,7 @@ import dashboardRoutes from './routes/dashboards.js';
 import notificationRoutes from './routes/notifications.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import queryRoutes from './routes/queries.js';
+import returnRoutes from './routes/returns.js';
 
 dotenv.config();
 
@@ -76,6 +77,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/queries', queryRoutes);
+app.use('/api/returns', returnRoutes);
 
 // ==========================================
 // Global Error Handler

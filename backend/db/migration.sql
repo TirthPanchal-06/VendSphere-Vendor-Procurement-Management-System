@@ -304,3 +304,58 @@ CREATE TABLE IF NOT EXISTS query_activities (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Item Returns & Warranty Management
+CREATE TABLE IF NOT EXISTS item_returns (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  rma_number VARCHAR(50) UNIQUE NOT NULL,
+  purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  vendor_id UUID NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+  item_name VARCHAR(200) NOT NULL,
+  item_category VARCHAR(100),
+  quantity_returned INTEGER NOT NULL,
+  unit_price NUMERIC(12, 2) NOT NULL,
+  total_return_amount NUMERIC(12, 2) NOT NULL,
+  return_reason VARCHAR(100) NOT NULL,
+  item_condition VARCHAR(50) NOT NULL,
+  reason_description TEXT,
+  
+  -- Warranty & Validity Verification Fields
+  warranty_period_days INTEGER DEFAULT 180,
+  purchase_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  warranty_expiry_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  warranty_status VARCHAR(50) DEFAULT 'Valid', -- 'Valid', 'Expired', 'Voided'
+  warranty_verified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  warranty_notes TEXT,
+  
+  -- Workflow & Approval Lifecycle
+  status VARCHAR(50) DEFAULT 'Requested', -- 'Requested', 'Warranty Verified', 'Approved', 'Rejected', 'Pickup Scheduled', 'Completed'
+  resolution_type VARCHAR(50) DEFAULT 'Refund', -- 'Refund', 'Replacement', 'Vendor Credit'
+  
+  -- Approver Information
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMP WITH TIME ZONE,
+  approval_notes TEXT,
+  rejection_reason TEXT,
+  
+  -- Logistics & Pickup
+  pickup_tracking_number VARCHAR(100),
+  pickup_carrier VARCHAR(100),
+  pickup_scheduled_date TIMESTAMP WITH TIME ZONE,
+  
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Return Activity Timeline & Auditing
+CREATE TABLE IF NOT EXISTS return_activities (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  return_id UUID NOT NULL REFERENCES item_returns(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action_type VARCHAR(50) NOT NULL, -- 'REQUEST_CREATED', 'WARRANTY_VERIFIED', 'APPROVED', 'REJECTED', 'PICKUP_SCHEDULED', 'COMPLETED'
+  notes TEXT,
+  previous_status VARCHAR(50),
+  new_status VARCHAR(50),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+

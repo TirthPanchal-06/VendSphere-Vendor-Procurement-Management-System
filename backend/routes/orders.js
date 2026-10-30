@@ -84,6 +84,19 @@ router.get('/:id', auth, async (req, res) => {
 
     po.feedbackQueries = feedbackRes.rows;
 
+    // Fetch associated item returns
+    const returnsRes = await req.db.query(
+      `SELECT r.*, u.name as requester_name, rev.name as reviewer_name
+       FROM item_returns r
+       JOIN users u ON r.requester_id = u.id
+       LEFT JOIN users rev ON r.reviewed_by = rev.id
+       WHERE r.purchase_order_id = $1
+       ORDER BY r.created_at DESC`,
+      [id]
+    );
+
+    po.itemReturns = returnsRes.rows;
+
     res.json(po);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve Purchase Order details.' });
@@ -379,18 +392,128 @@ router.post('/:id/complete', auth, authorize('Admin', 'ProcurementManager'), asy
       }
     }
 
-    // 3. Notify vendor of PO completion
-    const vendorUserRes = await client.query('SELECT user_id FROM vendors WHERE id = $1', [po.vendor_id]);
-    if (vendorUserRes.rows.length > 0 && vendorUserRes.rows[0].user_id) {
+    // 3. Notify and Send Email Notifications after purchasing items
+    const detailsRes = await client.query(
+      `SELECT pr.id as pr_id, pr.pr_number, pr.title as pr_title, pr.items as pr_items,
+              reqUser.id as requester_id, reqUser.name as requester_name, reqUser.email as requester_email,
+              v.name as vendor_name, v.email as vendor_email, v.user_id as vendor_user_id
+       FROM purchase_orders po
+       JOIN purchase_requests pr ON po.purchase_request_id = pr.id
+       JOIN users reqUser ON pr.requester_id = reqUser.id
+       JOIN vendors v ON po.vendor_id = v.id
+       WHERE po.id = $1`,
+      [id]
+    );
+
+    if (detailsRes.rows.length > 0) {
+      const orderInfo = detailsRes.rows[0];
+      const itemsList = Array.isArray(orderInfo.pr_items) ? orderInfo.pr_items : [];
+
+      // Format items table for email body
+      const formattedItems = itemsList.map((item, idx) => 
+        `  ${idx + 1}. ${item.name} (${item.category || 'General'}) — ${item.quantity} units @ INR ${parseFloat(item.estimated_cost).toFixed(2)} (Subtotal: INR ${(item.quantity * parseFloat(item.estimated_cost)).toFixed(2)})`
+      ).join('\n');
+
+      const deliveryDate = new Date();
+      const warrantyDays = 180;
+      const warrantyExpiry = new Date(deliveryDate.getTime() + warrantyDays * 24 * 60 * 60 * 1000);
+
+      // Email to Requester (Employee)
+      const requesterEmailSubject = `[VendSphere] Purchase Delivered & Items Received: ${po.po_number}`;
+      const requesterEmailBody = `
+Dear ${orderInfo.requester_name},
+
+Your requested items under requisition "${orderInfo.pr_title}" (${orderInfo.pr_number}) have been officially delivered, inspected, and completed under Purchase Order ${po.po_number}.
+
+Purchased Items Breakdown:
+${formattedItems}
+
+Order Valuation:
+- Total Procurement Spend: INR ${parseFloat(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+- Fulfilled By Supplier: ${orderInfo.vendor_name}
+- Delivery Notes: ${notes || 'Verified and accepted at receiving dock.'}
+
+Warranty & Validity Coverage:
+- Standard Quality Warranty: ${warrantyDays} Days Active
+- Warranty Activation Date: ${deliveryDate.toLocaleDateString()}
+- Warranty Expiration Date: ${warrantyExpiry.toLocaleDateString()}
+- Return Eligibility: Eligible for return, free replacement, or full credit refund if defective within ${warrantyDays} days.
+
+Need to Return an Item?
+If any item delivered has defects, damage, or specification mismatch, you can initiate a return directly from the "Returns & Warranty" portal or the Purchase Orders page.
+
+Regards,
+VendSphere Procurement & Asset Management
+      `.trim();
+
       await client.query(
-        'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)',
+        `INSERT INTO simulated_emails (po_id, email_type, to_email, subject, body)
+         VALUES ($1, $2, $3, $4, $5)`,
         [
-          vendorUserRes.rows[0].user_id,
-          'Purchase Order Completed',
-          `Purchase Order ${po.po_number} has been logged as fully completed/received.`,
-          'PO_ACCEPTED'
+          po.id,
+          'PURCHASE_COMPLETED',
+          orderInfo.requester_email || 'employee@example.com',
+          requesterEmailSubject,
+          requesterEmailBody
         ]
       );
+
+      // In-app notification to Requester
+      await client.query(
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          orderInfo.requester_id,
+          'Items Delivered & Received',
+          `Items for PO ${po.po_number} have been marked as completed. 180-day warranty coverage is now active.`,
+          'PR_APPROVED'
+        ]
+      );
+
+      // Email to Vendor
+      const vendorEmailSubject = `[VendSphere] Order Fulfillment Completed: ${po.po_number}`;
+      const vendorEmailBody = `
+Dear ${orderInfo.vendor_name},
+
+This official receipt confirms that shipment for Purchase Order ${po.po_number} has been received, inspected, and fully accepted by company procurement.
+
+Details:
+- PO Number: ${po.po_number}
+- Total Value: INR ${parseFloat(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+- Receipt Date: ${deliveryDate.toLocaleDateString()}
+- Inspection Notes: ${notes || 'Goods delivered in good condition.'}
+
+Thank you for your timely partnership and fulfillment.
+
+Regards,
+Corporate Procurement Department
+      `.trim();
+
+      await client.query(
+        `INSERT INTO simulated_emails (po_id, email_type, to_email, subject, body)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          po.id,
+          'PURCHASE_COMPLETED_VENDOR',
+          orderInfo.vendor_email || 'vendor@example.com',
+          vendorEmailSubject,
+          vendorEmailBody
+        ]
+      );
+
+      // In-app notification to Vendor
+      if (orderInfo.vendor_user_id) {
+        await client.query(
+          `INSERT INTO notifications (user_id, title, message, type)
+           VALUES ($1, $2, $3, $4)`,
+          [
+            orderInfo.vendor_user_id,
+            'Purchase Order Completed',
+            `Purchase Order ${po.po_number} has been logged as fully completed/received.`,
+            'PO_ACCEPTED'
+          ]
+        );
+      }
     }
 
     await client.commit();

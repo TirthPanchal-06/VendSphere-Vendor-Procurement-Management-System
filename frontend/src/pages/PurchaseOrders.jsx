@@ -5,7 +5,7 @@ import {
   Eye, Send, CheckCircle, PackageOpen, Award, X,
   AlertCircle, Mail, FileDown, Star, CreditCard, Banknote,
   Building2, Receipt, Printer, Download, QrCode, Lock,
-  MessageSquare, CheckCircle2
+  MessageSquare, CheckCircle2, RotateCcw, ShieldCheck
 } from 'lucide-react';
 
 
@@ -609,6 +609,24 @@ export const PurchaseOrders = () => {
                             <span>{po.feedback_count > 0 ? `Feedback (${po.feedback_rating || 5}★)` : 'Feedback'}</span>
                           </button>
                         )}
+                        {/* Return Items button — visible for completed orders */}
+                        {po.status === 'Completed' && (
+                          <button
+                            onClick={() => navigate('/returns')}
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '0.4rem 0.65rem',
+                              fontSize: '0.75rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title="Manage Returns & Warranty"
+                          >
+                            <RotateCcw size={12} />
+                            <span>Return Items</span>
+                          </button>
+                        )}
                         {/* Payment button — visible for accepted/completed POs */}
                         {(po.status === 'Accepted' || po.status === 'Completed') && (
                           <button onClick={() => openPaymentModal(po)} className="btn btn-primary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem', background: 'linear-gradient(135deg,#10b981,#059669)' }}>
@@ -651,12 +669,14 @@ export const PurchaseOrders = () => {
 
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--glass-border)', padding: '0 1.5rem', background: 'rgba(255,255,255,0.02)' }}>
-              {['details', 'feedback', 'emails'].map(tab => (
+              {['details', 'feedback', 'returns', 'emails'].map(tab => (
                 <button key={tab} type="button" onClick={() => setActiveTab(tab)} style={{ padding: '0.85rem 1rem', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'var(--transition-fast)', textTransform: 'capitalize' }}>
                   {tab === 'emails'
                     ? `Dispatched Emails (${poEmails.length})`
                     : tab === 'feedback'
                     ? `Feedback & Queries (${selectedPo.feedbackQueries?.length || 0})`
+                    : tab === 'returns'
+                    ? `Returns & Warranty (${selectedPo.itemReturns?.length || 0})`
                     : 'Order Details'}
                 </button>
               ))}
@@ -835,6 +855,117 @@ export const PurchaseOrders = () => {
                             style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
                           >
                             Open in Feedback & Queries Portal &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'returns' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Warranty Banner */}
+                  <div style={{
+                    padding: '1rem 1.25rem',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    borderRadius: 'var(--radius-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <ShieldCheck size={24} style={{ color: 'var(--success)' }} />
+                      <div>
+                        <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)', display: 'block' }}>
+                          Standard 180-Day Quality Warranty Coverage
+                        </strong>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          Ordered on {new Date(selectedPo.created_at).toLocaleDateString()} • Items eligible for replacement or refund upon inspection
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedPo.status === 'Completed' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDetailsModal(false);
+                          navigate('/returns');
+                        }}
+                        className="btn btn-primary"
+                        style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                      >
+                        <RotateCcw size={14} />
+                        <span>Request Return for this Order</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {(!selectedPo.itemReturns || selectedPo.itemReturns.length === 0) ? (
+                    <div style={{ padding: '2.5rem', textAlign: 'center', background: 'var(--card-item-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                      <RotateCcw size={36} style={{ color: 'var(--text-muted)', marginBottom: '0.75rem', opacity: 0.5 }} />
+                      <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.95rem' }}>No Returns Initiated</h4>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: '420px', margin: '0 auto 1.25rem auto' }}>
+                        All delivered goods under this purchase order are currently retained in good standing.
+                      </p>
+                    </div>
+                  ) : (
+                    selectedPo.itemReturns.map((ret) => (
+                      <div
+                        key={ret.id}
+                        style={{
+                          background: 'var(--card-item-bg)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '1.25rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.75rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            <span style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '0.85rem', fontFamily: 'monospace' }}>
+                              {ret.rma_number}
+                            </span>
+                            <h4 style={{ margin: '2px 0 0 0', fontSize: '1rem' }}>{ret.item_name}</h4>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              Requested by {ret.requester_name} on {new Date(ret.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <span className={`badge badge-${ret.warranty_status === 'Valid' ? 'active' : 'rejected'}`} style={{ fontSize: '0.72rem' }}>
+                              Warranty: {ret.warranty_status}
+                            </span>
+                            <span className="badge badge-pending" style={{ fontSize: '0.72rem' }}>
+                              {ret.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          <div>Quantity: <strong style={{ color: 'var(--text-primary)' }}>{ret.quantity_returned} units</strong></div>
+                          <div>Value: <strong style={{ color: 'var(--accent)' }}>₹{parseFloat(ret.total_return_amount).toLocaleString()}</strong></div>
+                          <div>Reason: <strong style={{ color: 'var(--text-primary)' }}>{ret.return_reason}</strong></div>
+                          <div>Resolution: <strong style={{ color: 'var(--success)' }}>{ret.resolution_type}</strong></div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowDetailsModal(false);
+                              navigate('/returns');
+                            }}
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
+                          >
+                            Open in Returns Portal &rarr;
                           </button>
                         </div>
                       </div>

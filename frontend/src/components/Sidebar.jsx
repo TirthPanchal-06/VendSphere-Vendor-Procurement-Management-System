@@ -12,7 +12,8 @@ import {
   CreditCard,
   LogOut,
   Building2,
-  MessageSquare
+  MessageSquare,
+  RotateCcw
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -33,6 +34,7 @@ export const Sidebar = () => {
       { to: '/rfqs', label: 'Sourcing (RFQs)', icon: Layers, roles: ['Admin', 'ProcurementManager', 'Vendor'] },
       { to: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingBag, roles: ['Admin', 'ProcurementManager', 'Manager', 'Employee', 'Vendor'] },
       { to: '/queries', label: 'Feedback & Queries', icon: MessageSquare, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee'] },
+      { to: '/returns', label: 'Returns & Warranty', icon: RotateCcw, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee', 'Vendor'] },
       { to: '/subscriptions', label: 'Subscription & Billing', icon: CreditCard, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager'] },
     ];
 
