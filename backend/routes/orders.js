@@ -1,5 +1,6 @@
 import express from 'express';
 import { auth, authorize } from '../middleware/authMiddleware.js';
+import { sendEmailNotification, wrapHtmlEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -205,10 +206,29 @@ Regards,
 Procurement Operations Team
       `.trim();
 
-      await req.db.query(
-        'INSERT INTO simulated_emails (po_id, to_email, subject, body) VALUES ($1, $2, $3, $4)',
-        [po.id, vendor.email || 'vendor@example.com', emailSubject, emailBody]
-      );
+      await sendEmailNotification({
+        dbClient: req.db,
+        poId: po.id,
+        emailType: 'PO_SENT',
+        toEmail: vendor.email || 'vendor@example.com',
+        subject: emailSubject,
+        body: emailBody,
+        html: wrapHtmlEmail({
+          title: `Purchase Order Dispatched: ${po.po_number}`,
+          subtitle: `Official procurement order for ${vendor.name}`,
+          badgeText: 'Dispatched',
+          badgeType: 'primary',
+          contentHtml: `
+            <p>Dear <strong>${vendor.name}</strong>,</p>
+            <p>An official Purchase Order (<strong>${po.po_number}</strong>) has been dispatched to your portal for review and signing.</p>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+              <p style="margin: 0 0 6px 0;"><strong>PO Number:</strong> ${po.po_number}</p>
+              <p style="margin: 0;"><strong>Total Valuation:</strong> INR ${parseFloat(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            </div>
+            <p>Please log into the VendSphere Supplier Portal to review and confirm acceptance of this contract.</p>
+          `
+        })
+      });
     }
 
     res.json({ message: 'Purchase Order sent to vendor.', purchaseOrder: po });
@@ -263,10 +283,25 @@ Regards,
 VendSphere Portal Systems
     `.trim();
 
-    await req.db.query(
-      'INSERT INTO simulated_emails (po_id, to_email, subject, body) VALUES ($1, $2, $3, $4)',
-      [po.id, vendor.email || 'vendor@example.com', emailSubjectVendor, emailBodyVendor]
-    );
+    await sendEmailNotification({
+      dbClient: req.db,
+      poId: po.id,
+      emailType: 'PO_ACCEPTED_VENDOR',
+      toEmail: vendor.email || 'vendor@example.com',
+      subject: emailSubjectVendor,
+      body: emailBodyVendor,
+      html: wrapHtmlEmail({
+        title: `Purchase Order Confirmed: ${po.po_number}`,
+        subtitle: `Agreement signed by ${vendor.name}`,
+        badgeText: 'Contract Signed',
+        badgeType: 'success',
+        contentHtml: `
+          <p>Dear <strong>${vendor.name}</strong>,</p>
+          <p>This email confirms that you have signed and accepted Purchase Order <strong>${po.po_number}</strong>.</p>
+          <p>Our procurement operations team has been notified. Please begin preparing the shipment as per agreed terms.</p>
+        `
+      })
+    });
 
     // Notify all active Procurement Managers and send emails
     const PMs = await req.db.query('SELECT id, name, email FROM users WHERE role = \'ProcurementManager\' AND status = \'Active\'');
@@ -294,10 +329,28 @@ Regards,
 VendSphere Portal Systems
       `.trim();
 
-      await req.db.query(
-        'INSERT INTO simulated_emails (po_id, to_email, subject, body) VALUES ($1, $2, $3, $4)',
-        [po.id, pm.email || 'procurement@example.com', emailSubjectPm, emailBodyPm]
-      );
+      await sendEmailNotification({
+        dbClient: req.db,
+        poId: po.id,
+        emailType: 'PO_ACCEPTED_PM',
+        toEmail: pm.email || 'procurement@example.com',
+        subject: emailSubjectPm,
+        body: emailBodyPm,
+        html: wrapHtmlEmail({
+          title: `Supplier Signed Purchase Order: ${po.po_number}`,
+          subtitle: `Accepted by ${vendor.name}`,
+          badgeText: 'Accepted',
+          badgeType: 'success',
+          contentHtml: `
+            <p>Dear <strong>${pm.name}</strong>,</p>
+            <p>Supplier <strong>${vendor.name}</strong> has officially signed and accepted Purchase Order <strong>${po.po_number}</strong>.</p>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+              <p style="margin: 0 0 6px 0;"><strong>Contract Status:</strong> Accepted</p>
+              <p style="margin: 0;"><strong>Total Valuation:</strong> INR ${parseFloat(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            </div>
+          `
+        })
+      });
     }
 
     res.json({ message: 'Purchase Order accepted.', purchaseOrder: updated.rows[0] });
@@ -446,17 +499,58 @@ Regards,
 VendSphere Procurement & Asset Management
       `.trim();
 
-      await client.query(
-        `INSERT INTO simulated_emails (po_id, email_type, to_email, subject, body)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          po.id,
-          'PURCHASE_COMPLETED',
-          orderInfo.requester_email || 'employee@example.com',
-          requesterEmailSubject,
-          requesterEmailBody
-        ]
-      );
+      // 1. Send Post-Purchase Email to Requester (Employee) with Warranty activation
+      const requesterHtml = wrapHtmlEmail({
+        title: `Purchase Delivered & Items Received: ${po.po_number}`,
+        subtitle: `Procurement fulfillment for requisition "${orderInfo.pr_title}"`,
+        badgeText: 'Items Delivered',
+        badgeType: 'success',
+        contentHtml: `
+          <p>Dear <strong>${orderInfo.requester_name}</strong>,</p>
+          <p>Your requested items under requisition "<strong>${orderInfo.pr_title}</strong>" (${orderInfo.pr_number}) have been officially delivered, inspected, and completed under Purchase Order <strong>${po.po_number}</strong>.</p>
+          
+          <h4 style="margin: 16px 0 8px 0; font-size: 13px; color: #0f172a; text-transform: uppercase;">Purchased Items Breakdown:</h4>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
+            <thead>
+              <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+                <th style="padding: 8px; text-align: left;">Item</th>
+                <th style="padding: 8px; text-align: center;">Qty</th>
+                <th style="padding: 8px; text-align: right;">Unit Price</th>
+                <th style="padding: 8px; text-align: right;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsList.map(item => `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                  <td style="padding: 8px;"><strong>${item.name}</strong> (${item.category || 'General'})</td>
+                  <td style="padding: 8px; text-align: center;">${item.quantity}</td>
+                  <td style="padding: 8px; text-align: right;">INR ${parseFloat(item.estimated_cost).toFixed(2)}</td>
+                  <td style="padding: 8px; text-align: right; font-weight: bold;">INR ${(item.quantity * parseFloat(item.estimated_cost)).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+              <strong style="color: #166534; font-size: 14px;">Warranty & Return Eligibility Coverage</strong>
+            </div>
+            <p style="margin: 0 0 4px 0; font-size: 13px; color: #15803d;"><strong>Coverage:</strong> ${warrantyDays} Days Quality Warranty Active</p>
+            <p style="margin: 0 0 4px 0; font-size: 13px; color: #15803d;"><strong>Active From:</strong> ${deliveryDate.toLocaleDateString()} &bull; <strong>Expires On:</strong> ${warrantyExpiry.toLocaleDateString()}</p>
+            <p style="margin: 0; font-size: 12px; color: #166534;">If any item delivered has defects, damage, or specification mismatch, you can initiate a return directly from the <strong>Returns & Warranty</strong> portal.</p>
+          </div>
+        `
+      });
+
+      await sendEmailNotification({
+        dbClient: client,
+        poId: po.id,
+        emailType: 'PURCHASE_COMPLETED',
+        toEmail: orderInfo.requester_email || 'employee@example.com',
+        subject: requesterEmailSubject,
+        body: requesterEmailBody,
+        html: requesterHtml
+      });
 
       // In-app notification to Requester
       await client.query(
@@ -470,7 +564,7 @@ VendSphere Procurement & Asset Management
         ]
       );
 
-      // Email to Vendor
+      // 2. Send Post-Purchase Email to Vendor
       const vendorEmailSubject = `[VendSphere] Order Fulfillment Completed: ${po.po_number}`;
       const vendorEmailBody = `
 Dear ${orderInfo.vendor_name},
@@ -489,17 +583,32 @@ Regards,
 Corporate Procurement Department
       `.trim();
 
-      await client.query(
-        `INSERT INTO simulated_emails (po_id, email_type, to_email, subject, body)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          po.id,
-          'PURCHASE_COMPLETED_VENDOR',
-          orderInfo.vendor_email || 'vendor@example.com',
-          vendorEmailSubject,
-          vendorEmailBody
-        ]
-      );
+      const vendorHtml = wrapHtmlEmail({
+        title: `Order Fulfillment Completed: ${po.po_number}`,
+        subtitle: `Receipt confirmed for ${orderInfo.vendor_name}`,
+        badgeText: 'Completed',
+        badgeType: 'success',
+        contentHtml: `
+          <p>Dear <strong>${orderInfo.vendor_name}</strong>,</p>
+          <p>This official receipt confirms that shipment for Purchase Order <strong>${po.po_number}</strong> has been received, inspected, and fully accepted by company procurement.</p>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+            <p style="margin: 0 0 6px 0;"><strong>PO Number:</strong> ${po.po_number}</p>
+            <p style="margin: 0 0 6px 0;"><strong>Total Value:</strong> INR ${parseFloat(po.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <p style="margin: 0;"><strong>Inspection Notes:</strong> ${notes || 'Goods delivered in good condition.'}</p>
+          </div>
+          <p>Thank you for your timely partnership and fulfillment.</p>
+        `
+      });
+
+      await sendEmailNotification({
+        dbClient: client,
+        poId: po.id,
+        emailType: 'PURCHASE_COMPLETED_VENDOR',
+        toEmail: orderInfo.vendor_email || 'vendor@example.com',
+        subject: vendorEmailSubject,
+        body: vendorEmailBody,
+        html: vendorHtml
+      });
 
       // In-app notification to Vendor
       if (orderInfo.vendor_user_id) {

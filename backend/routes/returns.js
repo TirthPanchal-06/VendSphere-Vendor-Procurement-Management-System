@@ -1,5 +1,6 @@
 import express from 'express';
 import { auth, authorize } from '../middleware/authMiddleware.js';
+import { sendEmailNotification, wrapHtmlEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -373,48 +374,50 @@ router.post('/', auth, async (req, res) => {
       );
     }
 
-    // 8. SIMULATED EMAIL NOTIFICATIONS FOR RETURN FLOW
-    const emailSubjectRequester = `[VendSphere] Return Request Submitted: ${rmaNumber} (${po.po_number})`;
-    const emailBodyRequester = `
-Dear ${req.user.name || po.requester_name},
+    // 8. SEND EMAIL NOTIFICATIONS (SMTP + PERSISTENT DATABASE LOG)
+    const requesterHtml = wrapHtmlEmail({
+      title: `Return Request Submitted: ${rmaNumber}`,
+      subtitle: `Associated Order: ${po.po_number}`,
+      badgeText: 'Return Lodged',
+      badgeType: 'warning',
+      contentHtml: `
+        <p>Dear <strong>${req.user.name || po.requester_name}</strong>,</p>
+        <p>Your item return request has been successfully registered in the VendSphere Procurement System.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <table style="width: 100%; font-size: 13px;" cellpadding="4">
+            <tr><td style="color: #64748b; width: 140px;">RMA Number:</td><td><strong style="color: #2563eb;">${rmaNumber}</strong></td></tr>
+            <tr><td style="color: #64748b;">Order Number:</td><td><strong>${po.po_number}</strong></td></tr>
+            <tr><td style="color: #64748b;">Item Name:</td><td><strong>${itemName}</strong></td></tr>
+            <tr><td style="color: #64748b;">Return Quantity:</td><td>${parsedQty} unit(s)</td></tr>
+            <tr><td style="color: #64748b;">Estimated Value:</td><td><strong>INR ${totalReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></td></tr>
+            <tr><td style="color: #64748b;">Stated Reason:</td><td>${returnReason}</td></tr>
+            <tr><td style="color: #64748b;">Condition:</td><td>${itemCondition}</td></tr>
+          </table>
+        </div>
 
-Your item return request has been successfully registered in the VendSphere Procurement System.
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px; margin: 16px 0;">
+          <strong style="color: #166534; font-size: 13px;">Warranty Verification Status:</strong>
+          <p style="margin: 4px 0 0 0; font-size: 12px; color: #15803d;">
+            ${warrantyStatus === 'Valid' ? 'VERIFIED (Within Active 180-Day Warranty)' : 'WARRANTY EXPIRED'} &bull; Expires: ${warrantyExpiryDate.toLocaleDateString()}
+          </p>
+        </div>
 
-Return Ticket Details:
-- RMA Number: ${rmaNumber}
-- Order Number: ${po.po_number}
-- Item Name: ${itemName}
-- Quantity: ${parsedQty} unit(s)
-- Estimated Refund / Return Value: INR ${totalReturnAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-- Reason for Return: ${returnReason}
-- Item Condition: ${itemCondition}
+        <p style="font-size: 13px; color: #475569;">
+          <strong>Next Step:</strong> Corporate procurement management is reviewing your RMA ticket. You will receive an automated approval notification with pickup/replacement instructions once reviewed.
+        </p>
+      `
+    });
 
-Warranty & Validity Verification:
-- Purchase Date: ${purchaseDate.toLocaleDateString()}
-- Warranty Period: ${warrantyDays} Days
-- Warranty Expiration Date: ${warrantyExpiryDate.toLocaleDateString()}
-- Warranty Validity: ${warrantyStatus === 'Valid' ? 'VERIFIED (Within Active Warranty)' : 'EXPIRED'}
-- Notes: ${warrantyNotes}
-
-Next Step in Workflow:
-Management is currently reviewing your return request. Once approved, pickup logistics or replacement shipping will be arranged automatically.
-
-Regards,
-VendSphere Returns & Quality Operations
-    `.trim();
-
-    await client.query(
-      `INSERT INTO simulated_emails (po_id, return_id, email_type, to_email, subject, body)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        po.id,
-        newReturn.id,
-        'RETURN_REQUESTED',
-        req.user.email || po.requester_email || 'employee@example.com',
-        emailSubjectRequester,
-        emailBodyRequester
-      ]
-    );
+    await sendEmailNotification({
+      dbClient: client,
+      poId: po.id,
+      returnId: newReturn.id,
+      emailType: 'RETURN_REQUESTED',
+      toEmail: req.user.email || po.requester_email || 'employee@example.com',
+      subject: emailSubjectRequester,
+      body: emailBodyRequester,
+      html: requesterHtml
+    });
 
     // Email to Vendor
     const emailSubjectVendor = `[VendSphere] Return Request Notification: ${rmaNumber} for Order ${po.po_number}`;
@@ -437,18 +440,35 @@ Regards,
 Corporate Sourcing & Procurement Office
     `.trim();
 
-    await client.query(
-      `INSERT INTO simulated_emails (po_id, return_id, email_type, to_email, subject, body)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        po.id,
-        newReturn.id,
-        'RETURN_VENDOR_NOTICE',
-        po.vendor_email || 'vendor@example.com',
-        emailSubjectVendor,
-        emailBodyVendor
-      ]
-    );
+    const vendorHtml = wrapHtmlEmail({
+      title: `Return Request Notice: ${rmaNumber}`,
+      subtitle: `Goods delivered under Order ${po.po_number}`,
+      badgeText: 'RMA Lodged',
+      badgeType: 'warning',
+      contentHtml: `
+        <p>Dear <strong>${po.vendor_name}</strong>,</p>
+        <p>A customer return request has been registered for items delivered under Purchase Order <strong>${po.po_number}</strong>.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 0 0 6px 0;"><strong>RMA Number:</strong> ${rmaNumber}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Item:</strong> ${itemName} (${parsedQty} units)</p>
+          <p style="margin: 0 0 6px 0;"><strong>Reason:</strong> ${returnReason}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Physical Condition:</strong> ${itemCondition}</p>
+          <p style="margin: 0;"><strong>Customer Notes:</strong> ${reasonDescription || 'None provided'}</p>
+        </div>
+        <p>Please prepare for return authorization and potential restocking/replacement as soon as corporate procurement completes review.</p>
+      `
+    });
+
+    await sendEmailNotification({
+      dbClient: client,
+      poId: po.id,
+      returnId: newReturn.id,
+      emailType: 'RETURN_VENDOR_NOTICE',
+      toEmail: po.vendor_email || 'vendor@example.com',
+      subject: emailSubjectVendor,
+      body: emailBodyVendor,
+      html: vendorHtml
+    });
 
     await client.commit();
     res.status(201).json(newReturn);
@@ -592,7 +612,7 @@ router.post('/:id/approve', auth, authorize('Admin', 'Company Admin', 'Procureme
       );
     }
 
-    // 4. SIMULATED EMAIL NOTIFICATIONS FOR APPROVAL
+    // 4. SEND EMAIL NOTIFICATIONS (SMTP + PERSISTENT DATABASE LOG)
     const emailSubjectRequester = `[VendSphere] Return Authorized: ${ret.rma_number} Approved`;
     const emailBodyRequester = `
 Dear ${ret.requester_name},
@@ -614,18 +634,38 @@ Regards,
 Procurement & Returns Authority
     `.trim();
 
-    await client.query(
-      `INSERT INTO simulated_emails (po_id, return_id, email_type, to_email, subject, body)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        ret.purchase_order_id,
-        id,
-        'RETURN_APPROVED',
-        ret.requester_email || 'employee@example.com',
-        emailSubjectRequester,
-        emailBodyRequester
-      ]
-    );
+    const requesterApprovalHtml = wrapHtmlEmail({
+      title: `Return Authorized: ${ret.rma_number} Approved`,
+      subtitle: `RMA approval for Order ${ret.po_number}`,
+      badgeText: 'Return Approved',
+      badgeType: 'success',
+      contentHtml: `
+        <p>Dear <strong>${ret.requester_name}</strong>,</p>
+        <p>Your item return request (<strong>${ret.rma_number}</strong>) has been <span style="color: #166534; font-weight: bold;">APPROVED</span> by corporate management.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <table style="width: 100%; font-size: 13px;" cellpadding="4">
+            <tr><td style="color: #64748b; width: 140px;">RMA Number:</td><td><strong>${ret.rma_number}</strong></td></tr>
+            <tr><td style="color: #64748b;">Order Number:</td><td><strong>${ret.po_number}</strong></td></tr>
+            <tr><td style="color: #64748b;">Returning Item:</td><td>${ret.quantity_returned}x ${ret.item_name}</td></tr>
+            <tr><td style="color: #64748b;">Authorized Resolution:</td><td><strong style="color: #16a34a;">${resolutionType}</strong></td></tr>
+            <tr><td style="color: #64748b;">Approving Official:</td><td>${req.user.name} (${req.user.role})</td></tr>
+            <tr><td style="color: #64748b;">Reviewer Notes:</td><td>${approvalNotes || 'All conditions verified.'}</td></tr>
+          </table>
+        </div>
+        <p style="font-size: 13px;"><strong>Return Logistics Instructions:</strong> Please package the item securely with the RMA number <code>${ret.rma_number}</code> visibly labeled. Logistics pickup will be coordinated shortly.</p>
+      `
+    });
+
+    await sendEmailNotification({
+      dbClient: client,
+      poId: ret.purchase_order_id,
+      returnId: id,
+      emailType: 'RETURN_APPROVED',
+      toEmail: ret.requester_email || 'employee@example.com',
+      subject: emailSubjectRequester,
+      body: emailBodyRequester,
+      html: requesterApprovalHtml
+    });
 
     // Email to Vendor
     const emailSubjectVendor = `[VendSphere] RMA Authorization Notice: ${ret.rma_number} Approved`;
@@ -647,18 +687,35 @@ Regards,
 VendSphere Supply Chain Operations
     `.trim();
 
-    await client.query(
-      `INSERT INTO simulated_emails (po_id, return_id, email_type, to_email, subject, body)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        ret.purchase_order_id,
-        id,
-        'RETURN_APPROVED_VENDOR',
-        ret.vendor_email || 'vendor@example.com',
-        emailSubjectVendor,
-        emailBodyVendor
-      ]
-    );
+    const vendorApprovalHtml = wrapHtmlEmail({
+      title: `RMA Authorized: ${ret.rma_number}`,
+      subtitle: `Vendor return notice for Order ${ret.po_number}`,
+      badgeText: 'RMA Authorized',
+      badgeType: 'success',
+      contentHtml: `
+        <p>Dear <strong>${ret.vendor_name}</strong>,</p>
+        <p>This notice confirms that Return Merchandise Authorization <strong>${ret.rma_number}</strong> has been approved by company procurement.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 0 0 6px 0;"><strong>RMA Number:</strong> ${ret.rma_number}</p>
+          <p style="margin: 0 0 6px 0;"><strong>PO Reference:</strong> ${ret.po_number}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Returning Item:</strong> ${ret.quantity_returned}x ${ret.item_name}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Authorized Resolution:</strong> ${resolutionType}</p>
+          <p style="margin: 0;"><strong>Total Valuation:</strong> INR ${parseFloat(ret.total_return_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+        </div>
+        <p>Please coordinate return intake and credit/replacement processing as per contract terms.</p>
+      `
+    });
+
+    await sendEmailNotification({
+      dbClient: client,
+      poId: ret.purchase_order_id,
+      returnId: id,
+      emailType: 'RETURN_APPROVED_VENDOR',
+      toEmail: ret.vendor_email || 'vendor@example.com',
+      subject: emailSubjectVendor,
+      body: emailBodyVendor,
+      html: vendorApprovalHtml
+    });
 
     await client.commit();
     res.json(updatedRes.rows[0]);
@@ -755,18 +812,34 @@ Regards,
 Procurement & Returns Authority
     `.trim();
 
-    await client.query(
-      `INSERT INTO simulated_emails (po_id, return_id, email_type, to_email, subject, body)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        ret.purchase_order_id,
-        id,
-        'RETURN_REJECTED',
-        ret.requester_email || 'employee@example.com',
-        emailSubject,
-        emailBody
-      ]
-    );
+    const rejectionHtml = wrapHtmlEmail({
+      title: `Return Request Declined: ${ret.rma_number}`,
+      subtitle: `Decision on Order ${ret.po_number}`,
+      badgeText: 'Declined',
+      badgeType: 'danger',
+      contentHtml: `
+        <p>Dear <strong>${ret.requester_name}</strong>,</p>
+        <p>Your item return request (<strong>${ret.rma_number}</strong>) for Purchase Order <strong>${ret.po_number}</strong> could not be approved at this time.</p>
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 0 0 6px 0;"><strong>RMA Number:</strong> ${ret.rma_number}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Item:</strong> ${ret.item_name}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Reviewed By:</strong> ${req.user.name} (${req.user.role})</p>
+          <p style="margin: 0; color: #b91c1c;"><strong>Reason for Decline:</strong> ${rejectionReason}</p>
+        </div>
+        <p style="font-size: 13px;">If you have additional warranty certificates, serial numbers, or delivery receipt proof, please contact your corporate procurement desk.</p>
+      `
+    });
+
+    await sendEmailNotification({
+      dbClient: client,
+      poId: ret.purchase_order_id,
+      returnId: id,
+      emailType: 'RETURN_REJECTED',
+      toEmail: ret.requester_email || 'employee@example.com',
+      subject: emailSubject,
+      body: emailBody,
+      html: rejectionHtml
+    });
 
     await client.commit();
     res.json(updatedRes.rows[0]);
@@ -895,18 +968,35 @@ Regards,
 VendSphere Operations
     `.trim();
 
-    await client.query(
-      `INSERT INTO simulated_emails (po_id, return_id, email_type, to_email, subject, body)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        ret.purchase_order_id,
-        id,
-        'RETURN_COMPLETED',
-        ret.requester_email || 'employee@example.com',
-        emailSubject,
-        emailBody
-      ]
-    );
+    const completionHtml = wrapHtmlEmail({
+      title: `Return Completed & Closed: ${ret.rma_number}`,
+      subtitle: `Resolution processed for Order ${ret.po_number}`,
+      badgeText: 'Completed',
+      badgeType: 'success',
+      contentHtml: `
+        <p>Dear <strong>${ret.requester_name}</strong>,</p>
+        <p>This email confirms that Return Request <strong>${ret.rma_number}</strong> has been fully completed and closed.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p style="margin: 0 0 6px 0;"><strong>RMA Number:</strong> ${ret.rma_number}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Item:</strong> ${ret.quantity_returned}x ${ret.item_name}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Resolution Executed:</strong> <span style="color: #166534; font-weight: bold;">${ret.resolution_type}</span></p>
+          <p style="margin: 0 0 6px 0;"><strong>Credit / Refund Amount:</strong> INR ${parseFloat(ret.total_return_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+          <p style="margin: 0;"><strong>Settlement Notes:</strong> ${resolutionNotes || 'Returned goods verified, restocked, and settled.'}</p>
+        </div>
+        <p>Thank you for using VendSphere procurement and warranty services.</p>
+      `
+    });
+
+    await sendEmailNotification({
+      dbClient: client,
+      poId: ret.purchase_order_id,
+      returnId: id,
+      emailType: 'RETURN_COMPLETED',
+      toEmail: ret.requester_email || 'employee@example.com',
+      subject: emailSubject,
+      body: emailBody,
+      html: completionHtml
+    });
 
     await client.commit();
     res.json(updated.rows[0]);
@@ -919,3 +1009,4 @@ VendSphere Operations
 });
 
 export default router;
+
