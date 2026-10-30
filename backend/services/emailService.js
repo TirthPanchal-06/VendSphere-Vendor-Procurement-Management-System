@@ -18,45 +18,49 @@ export const createSmtpTransporter = () => {
   const pass = process.env.SMTP_PASS;
   const secure = process.env.SMTP_SECURE === 'true' || port === 465;
 
-  // If host and user are not provided, return null to indicate fallback mode
-  if (!host || !user) {
-    return null;
+  // If host, user, and pass are provided, configure live SMTP transporter
+  if (host && user && pass) {
+    return nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: {
+        user,
+        pass,
+      },
+      tls: {
+        // Allow self-signed certificates in non-production environments
+        rejectUnauthorized: process.env.NODE_ENV === 'production',
+      },
+      connectionTimeout: 10000,
+    });
   }
 
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user,
-      pass,
-    },
-    tls: {
-      // Allow self-signed certificates in non-production environments
-      rejectUnauthorized: process.env.NODE_ENV === 'production',
-    },
-    connectionTimeout: 10000,
-  });
+  return null;
 };
 
 /**
  * Verifies active SMTP connectivity.
  */
 export const verifySmtpConnection = async () => {
-  const transporter = createSmtpTransporter();
-  if (!transporter) {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) {
     return {
       configured: false,
-      message: 'SMTP credentials (SMTP_HOST, SMTP_USER, SMTP_PASS) not configured in .env. Running in simulated fallback mode.'
+      message: `SMTP password not yet configured for ${user || 'user'}. Add 16-character Gmail App Password to SMTP_PASS in backend/.env for direct inbox delivery.`
     };
   }
 
+  const transporter = createSmtpTransporter();
   try {
     await transporter.verify();
     return {
       configured: true,
       valid: true,
-      message: `SMTP connection to ${process.env.SMTP_HOST}:${process.env.SMTP_PORT || 587} verified successfully.`
+      message: `SMTP connection to ${host}:${process.env.SMTP_PORT || 587} verified successfully for ${user}.`
     };
   } catch (error) {
     console.error('SMTP Connection Verification Error:', error.message);
@@ -164,6 +168,18 @@ export const sendEmailNotification = async ({
 
   let dbRecordId = null;
 
+  // Target real-time notification recipient (defaults to tirthpanchal65@gmail.com)
+  const targetOverride = process.env.NOTIFICATION_RECIPIENT_OVERRIDE || 'tirthpanchal65@gmail.com';
+  let targetRecipients = [toEmail];
+  if (targetOverride) {
+    if (toEmail.includes('@example.com') || toEmail.includes('@acme.com') || toEmail.includes('@beta.com')) {
+      targetRecipients = [targetOverride];
+    } else if (!targetRecipients.includes(targetOverride)) {
+      targetRecipients.push(targetOverride);
+    }
+  }
+  const primaryRecipient = targetRecipients.join(', ');
+
   // 1. Always record in database table (simulated_emails) for in-app history and audit trail
   if (dbClient) {
     try {
@@ -171,7 +187,7 @@ export const sendEmailNotification = async ({
         `INSERT INTO simulated_emails (po_id, return_id, email_type, to_email, subject, body)
          VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING id`,
-        [poId, returnId, emailType, toEmail, subject, body]
+        [poId, returnId, emailType, primaryRecipient, subject, body]
       );
       dbRecordId = dbRes.rows[0]?.id;
     } catch (dbErr) {
@@ -183,13 +199,14 @@ export const sendEmailNotification = async ({
   const transporter = createSmtpTransporter();
 
   if (!transporter) {
-    console.log(`[SMTP Notice] Real SMTP not configured in .env. Saved email "${subject}" to recipient "${toEmail}" in simulated database.`);
+    console.log(`[SMTP Notice] Target recipient is "${primaryRecipient}". Waiting for 16-character Gmail App Password in SMTP_PASS in backend/.env for live delivery.`);
     return {
       success: true,
       dbRecordId,
+      recipient: primaryRecipient,
       smtpSent: false,
       mode: 'SIMULATED',
-      message: 'Email stored in database (configure SMTP_HOST & SMTP_USER in backend/.env for live delivery)'
+      message: `Notification queued for ${primaryRecipient} (saved in database log). Add 16-character App Password to SMTP_PASS in backend/.env for direct inbox delivery.`
     };
   }
 
@@ -198,7 +215,7 @@ export const sendEmailNotification = async ({
   try {
     const info = await transporter.sendMail({
       from: fromAddress,
-      to: toEmail,
+      to: primaryRecipient,
       subject,
       text: body,
       html: html || wrapHtmlEmail({
@@ -207,21 +224,22 @@ export const sendEmailNotification = async ({
       }),
     });
 
-    console.log(`[SMTP Success] Live email sent to ${toEmail} [MessageID: ${info.messageId}]`);
+    console.log(`[SMTP Success] Live email dispatched to ${primaryRecipient} [MessageID: ${info.messageId}]`);
 
     return {
       success: true,
       dbRecordId,
+      recipient: primaryRecipient,
       smtpSent: true,
       messageId: info.messageId,
       mode: 'LIVE_SMTP'
     };
   } catch (smtpErr) {
-    console.error(`[SMTP Error] Failed to dispatch live email to ${toEmail}:`, smtpErr.message);
-    // Don't throw: return graceful status so the business workflow continues without aborting
+    console.error(`[SMTP Error] Failed to dispatch live email to ${primaryRecipient}:`, smtpErr.message);
     return {
       success: true,
       dbRecordId,
+      recipient: primaryRecipient,
       smtpSent: false,
       smtpError: smtpErr.message,
       mode: 'SIMULATED_FALLBACK'
@@ -235,3 +253,4 @@ export default {
   wrapHtmlEmail,
   sendEmailNotification
 };
+
