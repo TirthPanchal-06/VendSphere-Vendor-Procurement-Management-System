@@ -17,6 +17,7 @@ import Users from './pages/Users';
 import Subscriptions from './pages/Subscriptions';
 import Queries from './pages/Queries';
 import Returns from './pages/Returns';
+import RiskManagement from './pages/RiskManagement';
 
 /**
  * Route guard component for authenticated and role-restricted routes
@@ -95,6 +96,11 @@ const AppLayout = () => {
             {/* Item Returns & Warranty */}
             <Route path="/returns" element={
               <PrivateRoute allowedRoles={['Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee', 'Vendor']}><Returns /></PrivateRoute>
+            } />
+
+            {/* Risk Management & Telemetry */}
+            <Route path="/risks" element={
+              <PrivateRoute allowedRoles={['Admin', 'Company Admin', 'ProcurementManager', 'Manager']}><RiskManagement /></PrivateRoute>
             } />
 
             {/* Subscriptions & Billing */}

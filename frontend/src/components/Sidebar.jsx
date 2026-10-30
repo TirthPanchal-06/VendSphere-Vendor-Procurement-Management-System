@@ -13,7 +13,8 @@ import {
   LogOut,
   Building2,
   MessageSquare,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -35,6 +36,7 @@ export const Sidebar = () => {
       { to: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingBag, roles: ['Admin', 'ProcurementManager', 'Manager', 'Employee', 'Vendor'] },
       { to: '/queries', label: 'Feedback & Queries', icon: MessageSquare, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee'] },
       { to: '/returns', label: 'Returns & Warranty', icon: RotateCcw, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager', 'Employee', 'Vendor'] },
+      { to: '/risks', label: 'Risk Management', icon: AlertTriangle, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager'] },
       { to: '/subscriptions', label: 'Subscription & Billing', icon: CreditCard, roles: ['Admin', 'Company Admin', 'ProcurementManager', 'Manager'] },
     ];
 

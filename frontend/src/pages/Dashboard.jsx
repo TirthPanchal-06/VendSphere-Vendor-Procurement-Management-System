@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   ShieldCheck,
   ArrowUpRight,
+  AlertTriangle,
   X
 } from 'lucide-react';
 
@@ -31,6 +32,7 @@ import {
 export const Dashboard = () => {
   const { user, api } = useAuth();
   const [stats, setStats] = useState(null);
+  const [riskSummary, setRiskSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -43,8 +45,21 @@ export const Dashboard = () => {
   useEffect(() => {
     const fetchDashboardStats = async () => {
       try {
-        const res = await api.get('/api/dashboard');
-        setStats(res.data);
+        const [dashRes, riskRes] = await Promise.allSettled([
+          api.get('/api/dashboard'),
+          api.get('/api/risks/overview')
+        ]);
+
+        if (dashRes.status === 'fulfilled') {
+          setStats(dashRes.value.data);
+        } else {
+          setError('Failed to load dashboard metrics.');
+          console.error(dashRes.reason);
+        }
+
+        if (riskRes.status === 'fulfilled') {
+          setRiskSummary(riskRes.value.data);
+        }
       } catch (err) {
         setError('Failed to load dashboard metrics.');
         console.error(err);
@@ -385,6 +400,88 @@ export const Dashboard = () => {
                 </div>
               </div>
             </div>
+
+            {/* Real-Time Procurement Risk Telemetry Pulse */}
+            {riskSummary && (
+              <div
+                className="glass-panel"
+                style={{
+                  marginTop: '1.5rem',
+                  padding: '1.25rem 1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1.5rem',
+                  flexWrap: 'wrap',
+                  borderLeft: `4px solid ${
+                    (riskSummary.counts?.critical || 0) > 0
+                      ? 'var(--danger)'
+                      : (riskSummary.counts?.high || 0) > 0
+                      ? 'var(--warning)'
+                      : 'var(--success)'
+                  }`,
+                  background: 'var(--kpi-card)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div
+                    style={{
+                      width: '44px',
+                      height: '44px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: (riskSummary.counts?.critical || 0) > 0
+                        ? 'rgba(239, 68, 68, 0.15)'
+                        : 'rgba(245, 158, 11, 0.15)',
+                      color: (riskSummary.counts?.critical || 0) > 0 ? 'var(--danger)' : 'var(--warning)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    <AlertTriangle size={24} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                        Enterprise Procurement Risk Pulse
+                      </h4>
+                      <span
+                        className="badge"
+                        style={{
+                          background: (riskSummary.counts?.critical || 0) > 0
+                            ? 'rgba(239, 68, 68, 0.2)'
+                            : 'rgba(245, 158, 11, 0.2)',
+                          color: (riskSummary.counts?.critical || 0) > 0 ? 'var(--danger)' : 'var(--warning)',
+                          fontSize: '0.72rem'
+                        }}
+                      >
+                        Score: {riskSummary.overallRiskScore || 0}/100 • {riskSummary.riskLevel || 'Low'} Risk
+                      </span>
+                    </div>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Active threats detected: <strong style={{ color: 'var(--danger)' }}>{riskSummary.counts?.vendorDelays || 0} Vendor Delays</strong>, <strong style={{ color: 'var(--warning)' }}>{riskSummary.counts?.priceFluctuations || 0} Price Spikes</strong>, <strong style={{ color: 'var(--accent)' }}>{riskSummary.counts?.bottlenecks || 0} Bottlenecks</strong>. Total Exposure: ₹{(riskSummary.totalBudgetAtRisk || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+
+                <Link
+                  to="/risks"
+                  className="btn btn-secondary"
+                  style={{
+                    fontSize: '0.8rem',
+                    padding: '0.45rem 1rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <span>Open Risk Cockpit</span>
+                  <ArrowUpRight size={15} />
+                </Link>
+              </div>
+            )}
 
             {/* Spend Trend Bar Chart & Sourcing Category Split */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem', marginTop: '1.5rem' }}>
