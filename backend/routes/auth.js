@@ -25,8 +25,10 @@ router.post('/login', async (req, res) => {
       [cleanEmail, cleanTenantId]
     );
 
-    if (globalUserRes.rows.length === 0) {
-      // Fallback: search by email only if tenant_id match was slightly different
+    let globalUser = globalUserRes.rows[0];
+
+    if (!globalUser) {
+      // Fallback: search by email if tenant_id was omitted or formatted differently
       const fallbackUser = await queryGlobal(
         'SELECT id, email, password_hash, tenant_id, role FROM public.global_users WHERE LOWER(email) = $1',
         [cleanEmail]
@@ -34,12 +36,8 @@ router.post('/login', async (req, res) => {
       if (fallbackUser.rows.length === 0) {
         return res.status(401).json({ error: 'Invalid email, password, or tenant ID association.' });
       }
+      globalUser = fallbackUser.rows[0];
     }
-
-    const globalUser = globalUserRes.rows[0] || (await queryGlobal(
-      'SELECT id, email, password_hash, tenant_id, role FROM public.global_users WHERE LOWER(email) = $1',
-      [cleanEmail]
-    )).rows[0];
 
     // 2. Validate password
     let isMatch = await bcrypt.compare(password, globalUser.password_hash);

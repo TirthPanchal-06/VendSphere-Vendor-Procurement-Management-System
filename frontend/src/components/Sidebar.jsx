@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const Sidebar = () => {
-  const { user, tenantInfo, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   if (!user) return null;
 

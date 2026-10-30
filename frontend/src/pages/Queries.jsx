@@ -13,7 +13,6 @@ import {
   Plus,
   X,
   Eye,
-  FileText,
   Send,
   AlertTriangle,
   Check,

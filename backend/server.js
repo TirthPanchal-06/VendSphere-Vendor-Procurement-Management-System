@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { checkConnection } from './config/db.js';
 import { tenantResolver } from './middleware/tenantResolver.js';
 
-// Import Route Handlers
+// Route Handlers
 import tenantRoutes from './routes/tenants.js';
 import authRoutes from './routes/auth.js';
 import vendorRoutes from './routes/vendors.js';
@@ -21,16 +21,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enable CORS and JSON parsing middlewares
+// ==========================================
+// Middlewares
+// ==========================================
+
+// Enable CORS for client requests
 app.use(cors({
-  origin: '*', // Allow all client requests in local test environments
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id']
 }));
+
+// Request body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// API Health Check (Requires no tenant context)
+// ==========================================
+// Health Check Endpoint (No tenant context needed)
+// ==========================================
 app.get('/api/health', async (req, res) => {
   try {
     const dbStatus = await checkConnection();
@@ -49,12 +57,16 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Mount the SaaS Tenant Resolver Middleware
-// All routes below this resolver will dynamically check search_path context
+// ==========================================
+// Multi-Tenant Isolation Middleware
+// ==========================================
+// Resolves tenant context (via header, body, query, or subdomain) and binds isolated DB query runner
 app.use(tenantResolver);
 
-// Register Route Handlers
-app.use('/api/tenants', tenantRoutes); // register is excluded from tenant header enforcement internally
+// ==========================================
+// API Routes
+// ==========================================
+app.use('/api/tenants', tenantRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/purchase-requests', requestRoutes);
@@ -65,8 +77,9 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/queries', queryRoutes);
 
-
-// Global Error Handler Middleware
+// ==========================================
+// Global Error Handler
+// ==========================================
 app.use((err, req, res, next) => {
   console.error('Unhandled Server Error:', err);
   res.status(err.status || 500).json({
@@ -74,12 +87,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server
+// ==========================================
+// Server Initialization
+// ==========================================
 app.listen(PORT, async () => {
-  console.log(`===================================================`);
+  console.log('===================================================');
   console.log(`  VendSphere Server running on port ${PORT}`);
-  console.log(`===================================================`);
-  
+  console.log('===================================================');
+
   try {
     await checkConnection();
   } catch (err) {

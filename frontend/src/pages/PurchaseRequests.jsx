@@ -1,16 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plus, X, Eye, FileText, CheckCircle2, XCircle, ChevronRight, AlertCircle, ArrowUpRight, Crown } from 'lucide-react';
+import {
+  Plus,
+  X,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ArrowUpRight,
+  Crown
+} from 'lucide-react';
 import UpgradeModal from '../components/UpgradeModal';
 
+/**
+ * Purchase Requests (PR) Management Page
+ * Handles creation, routing, multi-stage approval, and audit trails for requisitions.
+ */
 export const PurchaseRequests = () => {
   const { api, user } = useAuth();
+
+  // Component state
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Subscription state & Upgrade Modal
+  // Subscription metadata & upgrade modal state
   const [subData, setSubData] = useState(null);
   const [upgradeModal, setUpgradeModal] = useState({
     isOpen: false,
@@ -21,23 +36,24 @@ export const PurchaseRequests = () => {
     currentCount: 0
   });
 
-  // Tab control for Managers / Admins to filter their pending approval queue
-  const [activeTab, setActiveTab] = useState('all'); // 'all' or 'pending'
+  // Tab control: 'all' or 'pending' (approvals assigned to the active manager/admin)
+  const [activeTab, setActiveTab] = useState('all');
 
-  // Modal Controls
+  // Modal controls
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedPr, setSelectedPr] = useState(null);
 
-  // New Request Form States
+  // New Request form fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [items, setItems] = useState([{ name: '', category: 'Hardware', quantity: 1, estimated_cost: 0.00 }]);
-  const [totalCost, setTotalCost] = useState(0.00);
+  const [items, setItems] = useState([{ name: '', category: 'Hardware', quantity: 1, estimated_cost: 0.0 }]);
+  const [totalCost, setTotalCost] = useState(0.0);
 
-  // Approval Form States
+  // Approval / Rejection remarks
   const [comments, setComments] = useState('');
 
+  // Fetch subscription quotas for the tenant
   const fetchSubData = async () => {
     if (user.role === 'Vendor') return;
     try {
@@ -48,6 +64,7 @@ export const PurchaseRequests = () => {
     }
   };
 
+  // Fetch purchase requisitions
   const fetchRequests = async () => {
     try {
       const res = await api.get('/api/purchase-requests');
@@ -65,14 +82,18 @@ export const PurchaseRequests = () => {
     fetchSubData();
   }, []);
 
-  // Calculate total cost when items change
+  // Recalculate total estimated cost when line items change
   useEffect(() => {
-    const cost = items.reduce((sum, item) => sum + (item.quantity * parseFloat(item.estimated_cost || 0)), 0);
+    const cost = items.reduce(
+      (sum, item) => sum + (item.quantity * parseFloat(item.estimated_cost || 0)),
+      0
+    );
     setTotalCost(cost);
   }, [items]);
 
+  // Line item handlers
   const handleAddItemRow = () => {
-    setItems([...items, { name: '', category: 'Hardware', quantity: 1, estimated_cost: 0.00 }]);
+    setItems([...items, { name: '', category: 'Hardware', quantity: 1, estimated_cost: 0.0 }]);
   };
 
   const handleRemoveItemRow = (index) => {
@@ -87,6 +108,7 @@ export const PurchaseRequests = () => {
     setItems(updated);
   };
 
+  // Create new purchase request (saved initially in Draft status)
   const handleCreateRequest = async (e) => {
     e.preventDefault();
     setError('');
@@ -102,7 +124,7 @@ export const PurchaseRequests = () => {
       setShowCreateModal(false);
       setTitle('');
       setDescription('');
-      setItems([{ name: '', category: 'Hardware', quantity: 1, estimated_cost: 0.00 }]);
+      setItems([{ name: '', category: 'Hardware', quantity: 1, estimated_cost: 0.0 }]);
       fetchRequests();
       fetchSubData();
     } catch (err) {
@@ -122,11 +144,11 @@ export const PurchaseRequests = () => {
     }
   };
 
+  // Submit draft PR for approval routing
   const handleSubmittingPR = async (prId) => {
     try {
       await api.post(`/api/purchase-requests/${prId}/submit`);
       fetchRequests();
-      // If details modal is open, refresh selected PR
       if (showDetailsModal && selectedPr?.id === prId) {
         handleViewDetails(prId);
       }
@@ -135,6 +157,7 @@ export const PurchaseRequests = () => {
     }
   };
 
+  // View details and approval audit history
   const handleViewDetails = async (prId) => {
     try {
       const res = await api.get(`/api/purchase-requests/${prId}`);
@@ -145,6 +168,7 @@ export const PurchaseRequests = () => {
     }
   };
 
+  // Manager/Admin approves the PR
   const handleApprove = async (prId) => {
     try {
       await api.post(`/api/purchase-requests/${prId}/approve`, { comments });
@@ -156,6 +180,7 @@ export const PurchaseRequests = () => {
     }
   };
 
+  // Manager/Admin rejects the PR
   const handleReject = async (prId) => {
     if (!comments) {
       alert('Please add rejection comments.');
@@ -171,10 +196,15 @@ export const PurchaseRequests = () => {
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading requisitions...</div>;
+  if (loading) {
+    return <div style={{ padding: '2rem' }}>Loading requisitions...</div>;
+  }
 
   return (
     <div>
+      {/* ─────────────────────────────────────────────────────────────
+          PAGE HEADER & QUOTA USAGE BADGE
+      ───────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', width: '100%', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -191,7 +221,9 @@ export const PurchaseRequests = () => {
                 fontSize: '0.8rem'
               }}>
                 <Crown size={14} style={{ color: subData.plan === 'Starter' ? 'var(--primary)' : 'var(--warning)' }} />
-                <span><strong>{subData.planName} Quota:</strong> {subData.usage?.prsThisMonth} / {subData.usage?.maxPr === -1 ? '∞' : subData.usage?.maxPr} PRs used</span>
+                <span>
+                  <strong>{subData.planName} Quota:</strong> {subData.usage?.prsThisMonth} / {subData.usage?.maxPr === -1 ? '∞' : subData.usage?.maxPr} PRs used
+                </span>
                 {subData.plan === 'Starter' && (
                   <Link to="/subscriptions" style={{ color: 'var(--primary)', fontWeight: '600', marginLeft: '0.25rem', textDecoration: 'none' }}>
                     Upgrade
@@ -200,7 +232,9 @@ export const PurchaseRequests = () => {
               </div>
             )}
           </div>
-          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>Track, approve, and route purchase requests across corporate departments.</p>
+          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
+            Track, approve, and route purchase requests across corporate departments.
+          </p>
         </div>
 
         {user.role !== 'Vendor' && (
@@ -211,6 +245,7 @@ export const PurchaseRequests = () => {
         )}
       </div>
 
+      {/* Error Alert */}
       {error && (
         <div className="alert-danger">
           {error}
@@ -252,7 +287,9 @@ export const PurchaseRequests = () => {
         </div>
       )}
 
-      {/* Requests Table */}
+      {/* ─────────────────────────────────────────────────────────────
+          PURCHASE REQUESTS TABLE
+      ───────────────────────────────────────────────────────────── */}
       <div className="glass-panel" style={{ padding: 0 }}>
         <div className="table-container">
           <table className="custom-table">
@@ -348,7 +385,9 @@ export const PurchaseRequests = () => {
         </div>
       </div>
 
-      {/* Create Requisition Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 1: CREATE REQUISITION
+      ───────────────────────────────────────────────────────────── */}
       {showCreateModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '800px' }}>
@@ -388,7 +427,7 @@ export const PurchaseRequests = () => {
                   </button>
                 </div>
 
-                {/* Items Grid */}
+                {/* Line Items List */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '240px', overflowY: 'auto', paddingRight: '5px' }}>
                   {items.map((item, idx) => (
                     <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1.2fr 0.8fr 1.2fr auto', gap: '0.5rem', alignItems: 'center' }}>
@@ -417,7 +456,7 @@ export const PurchaseRequests = () => {
                         className="form-input" 
                         placeholder="Qty" 
                         value={item.quantity} 
-                        onChange={e => handleItemChange(idx, 'quantity', parseInt(e.target.value) || 1)} 
+                        onChange={e => handleItemChange(idx, 'quantity', parseInt(e.target.value, 10) || 1)} 
                         required 
                       />
                       <input 
@@ -458,7 +497,9 @@ export const PurchaseRequests = () => {
         </div>
       )}
 
-      {/* Request Details & Approval Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 2: PR DETAILS, AUDIT LOGS & APPROVAL ACTION
+      ───────────────────────────────────────────────────────────── */}
       {showDetailsModal && selectedPr && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '750px' }}>
@@ -583,6 +624,7 @@ export const PurchaseRequests = () => {
         </div>
       )}
 
+      {/* Upgrade Quota Modal */}
       <UpgradeModal
         isOpen={upgradeModal.isOpen}
         onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}

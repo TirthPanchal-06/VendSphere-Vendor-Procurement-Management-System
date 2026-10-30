@@ -1,30 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Layers, Eye, FileSpreadsheet, Gift, Award, Plus, Calendar, X, ShieldAlert, BadgeCheck, Star, Sparkles, TrendingUp, CheckCircle, Crown } from 'lucide-react';
+import {
+  Eye,
+  FileSpreadsheet,
+  Award,
+  Plus,
+  Calendar,
+  X,
+  ShieldAlert,
+  BadgeCheck,
+  Star,
+  Sparkles,
+  Crown
+} from 'lucide-react';
 import UpgradeModal from '../components/UpgradeModal';
 
-// RFQ Sourcing Page
+/**
+ * RFQs & Sourcing Management Page
+ * Handles RFQ publication, supplier quotation proposals, and AI-driven bid comparisons.
+ */
 export const RFQs = () => {
   const { api, user } = useAuth();
 
-  // Page data
+  // ==========================================
+  // Component State
+  // ==========================================
+
+  // Sourcing and catalog data
   const [rfqs, setRfqs] = useState([]);
   const [approvedPrs, setApprovedPrs] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Modal visibility
+  // Modal visibility toggles
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
 
-  // Active selection
+  // Active RFQ and quotations for inspection / comparison
   const [selectedRfq, setSelectedRfq] = useState(null);
   const [rfqQuotations, setRfqQuotations] = useState([]);
 
-  // Subscription state & Upgrade modal
+  // Subscription plan & freemium quota state
   const [subData, setSubData] = useState(null);
   const [upgradeModal, setUpgradeModal] = useState({
     isOpen: false,
@@ -35,19 +54,23 @@ export const RFQs = () => {
     currentCount: 0
   });
 
-  // RFQ creation form
+  // Create RFQ form state
   const [selectedPrId, setSelectedPrId] = useState('');
   const [rfqTitle, setRfqTitle] = useState('');
   const [rfqDeadline, setRfqDeadline] = useState('');
   const [invitedVendorIds, setInvitedVendorIds] = useState([]);
 
-  // Vendor bid form
+  // Vendor quotation submission form state
   const [bidItems, setBidItems] = useState([]);
   const [bidDeliveryDays, setBidDeliveryDays] = useState(7);
   const [bidRemarks, setBidRemarks] = useState('');
-  const [bidTotal, setBidTotal] = useState(0.00);
+  const [bidTotal, setBidTotal] = useState(0.0);
 
-  // Fetch subscription details and quota usage
+  // ==========================================
+  // Data Fetching Functions
+  // ==========================================
+
+  // Fetch subscription metadata and current tenant limits
   const fetchSubData = async () => {
     if (user.role === 'Vendor') return;
     try {
@@ -58,7 +81,7 @@ export const RFQs = () => {
     }
   };
 
-  // Fetch RFQ list
+  // Fetch RFQs list (filtered server-side based on role)
   const fetchRfqs = async () => {
     try {
       const res = await api.get('/api/rfqs');
@@ -71,7 +94,7 @@ export const RFQs = () => {
     }
   };
 
-  // Load approved PRs and active vendors
+  // Load approved PRs and active registered suppliers for RFQ creation
   const loadSourcingDependencies = async () => {
     if (user.role === 'Vendor') return;
     try {
@@ -85,14 +108,29 @@ export const RFQs = () => {
     }
   };
 
-  // Initial data load
+  // Initial mount data retrieval
   useEffect(() => {
     fetchRfqs();
     loadSourcingDependencies();
     fetchSubData();
   }, [user]);
 
-  // Auto-fill title when a PR is selected
+  // Recalculate total bid valuation whenever vendor unit prices change
+  useEffect(() => {
+    if (user.role === 'Vendor') {
+      const total = bidItems.reduce(
+        (sum, item) => sum + (item.quantity * parseFloat(item.unit_price || 0)),
+        0
+      );
+      setBidTotal(total);
+    }
+  }, [bidItems]);
+
+  // ==========================================
+  // Action Handlers
+  // ==========================================
+
+  // Auto-fill title when a purchase request is chosen
   const handlePrSelect = (prId) => {
     setSelectedPrId(prId);
     const targetPr = approvedPrs.find(p => p.id === prId);
@@ -101,7 +139,7 @@ export const RFQs = () => {
     }
   };
 
-  // Create and publish a new RFQ
+  // Publish a new sourcing RFQ
   const handleCreateRfq = async (e) => {
     e.preventDefault();
     setError('');
@@ -117,10 +155,11 @@ export const RFQs = () => {
         purchaseRequestId: selectedPrId,
         title: rfqTitle,
         deadline: rfqDeadline,
-        items: (Array.isArray(targetPr.items) ? targetPr.items : []),
+        items: Array.isArray(targetPr.items) ? targetPr.items : [],
         vendorIds: invitedVendorIds
       });
 
+      // Reset form and reload
       setShowCreateModal(false);
       setSelectedPrId('');
       setRfqTitle('');
@@ -130,6 +169,7 @@ export const RFQs = () => {
       loadSourcingDependencies();
       fetchSubData();
     } catch (err) {
+      // Check for freemium subscription quota restrictions
       if (err.response?.status === 403 && (err.response?.data?.quotaReached || err.response?.data?.upgradeRequired)) {
         setShowCreateModal(false);
         setUpgradeModal({
@@ -146,7 +186,7 @@ export const RFQs = () => {
     }
   };
 
-  // Open RFQ details, pre-populate bid form for vendors
+  // View RFQ details (pre-populates quotation form for vendors)
   const handleViewRfq = async (rfqId) => {
     try {
       const res = await api.get(`/api/rfqs/${rfqId}`);
@@ -154,27 +194,19 @@ export const RFQs = () => {
 
       if (user.role === 'Vendor') {
         const items = Array.isArray(res.data.items) ? res.data.items : [];
-        setBidItems(items.map(item => ({ ...item, unit_price: 0.00 })));
+        setBidItems(items.map(item => ({ ...item, unit_price: 0.0 })));
       }
 
       setShowDetailsModal(true);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to view RFQ:', err);
     }
   };
 
-  // Recalculate total when item prices change
-  useEffect(() => {
-    if (user.role === 'Vendor') {
-      const total = bidItems.reduce((sum, item) => sum + (item.quantity * parseFloat(item.unit_price || 0)), 0);
-      setBidTotal(total);
-    }
-  }, [bidItems]);
-
-  // Update unit price for a specific line item
+  // Update line item bid price in vendor quotation form
   const handleBidUnitChange = (index, value) => {
     const updated = [...bidItems];
-    updated[index].unit_price = parseFloat(value) || 0.00;
+    updated[index].unit_price = parseFloat(value) || 0.0;
     setBidItems(updated);
   };
 
@@ -192,7 +224,7 @@ export const RFQs = () => {
       await api.post(`/api/rfqs/${selectedRfq.id}/quotations`, {
         items: itemsPayload,
         totalCost: bidTotal,
-        deliveryDays: parseInt(bidDeliveryDays),
+        deliveryDays: parseInt(bidDeliveryDays, 10),
         remarks: bidRemarks
       });
 
@@ -205,7 +237,7 @@ export const RFQs = () => {
     }
   };
 
-  // Open bid comparison with ML scores
+  // Open bid comparison view with AI evaluation matrix
   const handleOpenComparison = async (rfq) => {
     try {
       setSelectedRfq(rfq);
@@ -223,12 +255,12 @@ export const RFQs = () => {
           currentCount: 0
         });
       } else {
-        console.error(err);
+        console.error('Failed to load bid comparisons:', err);
       }
     }
   };
 
-  // Award contract to selected quotation
+  // Award contract to winning quotation
   const handleAwardContract = async (quotationId) => {
     if (!confirm('Are you sure you want to award this contract? All other bids will be rejected.')) return;
     try {
@@ -240,21 +272,31 @@ export const RFQs = () => {
     }
   };
 
-  // Toggle vendor invite selection
+  // Toggle supplier invitation checkbox
   const toggleVendorInvite = (vendorId) => {
     setInvitedVendorIds(prev =>
       prev.includes(vendorId) ? prev.filter(id => id !== vendorId) : [...prev, vendorId]
     );
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading RFQs...</div>;
+  if (loading) {
+    return <div style={{ padding: '2rem' }}>Loading RFQs...</div>;
+  }
 
+  // ==========================================
+  // Render
+  // ==========================================
   return (
     <div>
+      {/* ─────────────────────────────────────────────────────────────
+          PAGE HEADER & QUOTA USAGE BADGE
+      ───────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <h1 className="page-title" style={{ margin: 0 }}>Sourcing & Bidding</h1>
+
+            {/* Quota Badge for Buyer Roles */}
             {user.role !== 'Vendor' && subData && (
               <div style={{
                 display: 'inline-flex',
@@ -267,7 +309,9 @@ export const RFQs = () => {
                 fontSize: '0.8rem'
               }}>
                 <Crown size={14} style={{ color: subData.plan === 'Starter' ? 'var(--primary)' : 'var(--warning)' }} />
-                <span><strong>{subData.planName} Quota:</strong> {subData.usage?.rfqsThisMonth} / {subData.usage?.maxRfqs === -1 ? '∞' : subData.usage?.maxRfqs} RFQs used</span>
+                <span>
+                  <strong>{subData.planName} Quota:</strong> {subData.usage?.rfqsThisMonth} / {subData.usage?.maxRfqs === -1 ? '∞' : subData.usage?.maxRfqs} RFQs used
+                </span>
                 {subData.plan === 'Starter' && (
                   <Link to="/subscriptions" style={{ color: 'var(--primary)', fontWeight: '600', marginLeft: '0.25rem', textDecoration: 'none' }}>
                     Upgrade
@@ -276,8 +320,12 @@ export const RFQs = () => {
               </div>
             )}
           </div>
-          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>Manage supplier requests for quotations (RFQs), gather proposals, and award contracts.</p>
+          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
+            Manage supplier requests for quotations (RFQs), gather proposals, and award contracts.
+          </p>
         </div>
+
+        {/* Action Button */}
         {user.role !== 'Vendor' && (
           <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
             <Plus size={16} />
@@ -286,13 +334,16 @@ export const RFQs = () => {
         )}
       </div>
 
+      {/* Error Banner */}
       {error && (
         <div className="alert-danger">
           {error}
         </div>
       )}
 
-      {/* RFQ List Grid */}
+      {/* ─────────────────────────────────────────────────────────────
+          RFQs LIST TABLE
+      ───────────────────────────────────────────────────────────── */}
       <div className="glass-panel" style={{ padding: 0 }}>
         <div className="table-container">
           <table className="custom-table">
@@ -332,7 +383,10 @@ export const RFQs = () => {
                           RFQ {rfq.status}
                         </span>
                         {user.role === 'Vendor' && rfq.bid_id && (
-                          <span className={`badge badge-${rfq.bid_status?.toLowerCase() === 'accepted' ? 'active' : 'pending'}`} style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}>
+                          <span
+                            className={`badge badge-${rfq.bid_status?.toLowerCase() === 'accepted' ? 'active' : 'pending'}`}
+                            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                          >
                             Bid: {rfq.bid_status} (₹{parseFloat(rfq.bid_total_cost).toLocaleString()})
                           </span>
                         )}
@@ -341,7 +395,11 @@ export const RFQs = () => {
                     <td>{new Date(rfq.created_at).toLocaleDateString()}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                        <button onClick={() => handleViewRfq(rfq.id)} className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}>
+                        <button
+                          onClick={() => handleViewRfq(rfq.id)}
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}
+                        >
                           <Eye size={12} />
                           <span>View RFQ</span>
                         </button>
@@ -366,18 +424,24 @@ export const RFQs = () => {
         </div>
       </div>
 
-      {/* RFQ Creation Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 1: CREATE SOURCING RFQ
+      ───────────────────────────────────────────────────────────── */}
       {showCreateModal && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '750px' }}>
             <div className="modal-header">
               <h3>Create Sourcing RFQ</h3>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleCreateRfq}>
               <div className="modal-body">
+                {/* Requisition selector */}
                 <div className="form-group">
                   <label className="form-label">Approved Purchase Requisition</label>
                   <select
@@ -395,21 +459,49 @@ export const RFQs = () => {
                   </select>
                 </div>
 
+                {/* RFQ title */}
                 <div className="form-group">
                   <label className="form-label">RFQ Title</label>
-                  <input type="text" className="form-input" value={rfqTitle} onChange={e => setRfqTitle(e.target.value)} required />
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={rfqTitle}
+                    onChange={e => setRfqTitle(e.target.value)}
+                    required
+                  />
                 </div>
 
+                {/* Deadline */}
                 <div className="form-group">
                   <label className="form-label">Submission Deadline Date</label>
-                  <input type="date" className="form-input" value={rfqDeadline} onChange={e => setRfqDeadline(e.target.value)} required />
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={rfqDeadline}
+                    onChange={e => setRfqDeadline(e.target.value)}
+                    required
+                  />
                 </div>
 
-                {/* Vendor invite checklist */}
-                <h4 style={{ fontSize: '0.9rem', color: 'var(--accent)', marginBottom: '0.75rem', marginTop: '1.5rem' }}>Invite Active Suppliers</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxHeight: '180px', overflowY: 'auto', padding: '0.5rem', background: 'var(--card-item-bg)', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-sm)' }}>
+                {/* Supplier checklist */}
+                <h4 style={{ fontSize: '0.9rem', color: 'var(--accent)', marginBottom: '0.75rem', marginTop: '1.5rem' }}>
+                  Invite Active Suppliers
+                </h4>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '0.75rem',
+                  maxHeight: '180px',
+                  overflowY: 'auto',
+                  padding: '0.5rem',
+                  background: 'var(--card-item-bg)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-sm)'
+                }}>
                   {vendors.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No active vendors registered to invite.</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      No active vendors registered to invite.
+                    </p>
                   ) : (
                     vendors.map(v => (
                       <label key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.9rem' }}>
@@ -420,40 +512,67 @@ export const RFQs = () => {
                         />
                         <div>
                           <strong>{v.name}</strong>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>{v.category} • Score: {v.performance_score}/100</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block' }}>
+                            {v.category} • Score: {v.performance_score}/100
+                          </span>
                         </div>
                       </label>
                     ))
                   )}
                 </div>
               </div>
+
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Publish RFQ</button>
+                <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Publish RFQ
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* RFQ Details Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 2: RFQ DETAILS & VENDOR BIDDING
+      ───────────────────────────────────────────────────────────── */}
       {showDetailsModal && selectedRfq && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '750px' }}>
+            {/* Modal Header */}
             <div className="modal-header">
               <div>
-                <span style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem' }}>{selectedRfq.rfq_number}</span>
+                <span style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                  {selectedRfq.rfq_number}
+                </span>
                 <h3 style={{ margin: '2px 0 0 0' }}>{selectedRfq.title}</h3>
               </div>
-              <button onClick={() => setShowDetailsModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <button
+                onClick={() => setShowDetailsModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
                 <X size={18} />
               </button>
             </div>
+
             <div className="modal-body">
-              <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--card-item-bg)', padding: '1rem', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-sm)', marginBottom: '1.5rem' }}>
+              {/* Summary Cards */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                background: 'var(--card-item-bg)',
+                padding: '1rem',
+                border: '1px solid var(--glass-border)',
+                borderRadius: 'var(--radius-sm)',
+                marginBottom: '1.5rem'
+              }}>
                 <div>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'block' }}>Deadline Date</span>
-                  <span style={{ fontWeight: 'bold', color: 'var(--danger)' }}>{new Date(selectedRfq.deadline).toLocaleDateString()}</span>
+                  <span style={{ fontWeight: 'bold', color: 'var(--danger)' }}>
+                    {new Date(selectedRfq.deadline).toLocaleDateString()}
+                  </span>
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', display: 'block' }}>RFQ Sourcing Status</span>
@@ -461,15 +580,16 @@ export const RFQs = () => {
                 </div>
               </div>
 
-               {user.role === 'Vendor' ? (
+              {/* Vendor View: Submitted Bid or Bid Submission Form */}
+              {user.role === 'Vendor' ? (
                 selectedRfq.myQuotation ? (
-                  /* Vendor — View submitted bid */
+                  /* Case A: Vendor has already submitted a bid */
                   <div>
-                    <div style={{ 
-                      padding: '1rem', 
-                      background: 'rgba(16, 185, 129, 0.04)', 
-                      border: '1px solid rgba(16, 185, 129, 0.2)', 
-                      borderRadius: 'var(--radius-sm)', 
+                    <div style={{
+                      padding: '1rem',
+                      background: 'rgba(16, 185, 129, 0.04)',
+                      border: '1px solid rgba(16, 185, 129, 0.2)',
+                      borderRadius: 'var(--radius-sm)',
                       marginBottom: '1.5rem',
                       display: 'flex',
                       alignItems: 'center',
@@ -536,7 +656,7 @@ export const RFQs = () => {
                     </div>
                   </div>
                 ) : selectedRfq.status === 'Open' ? (
-                  /* Vendor — submit bid form */
+                  /* Case B: RFQ is Open, Vendor submits new proposal */
                   <form onSubmit={handleSubmitBid}>
                     <h4 style={{ fontSize: '0.95rem', color: 'var(--accent)', marginBottom: '0.75rem' }}>Submit Quotation Proposal</h4>
                     <div className="table-container" style={{ marginBottom: '1.5rem' }}>
@@ -609,20 +729,26 @@ export const RFQs = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                      <button type="button" onClick={() => setShowDetailsModal(false)} className="btn btn-secondary">Cancel</button>
-                      <button type="submit" className="btn btn-primary">Submit Quotation Bid</button>
+                      <button type="button" onClick={() => setShowDetailsModal(false)} className="btn btn-secondary">
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary">
+                        Submit Quotation Bid
+                      </button>
                     </div>
                   </form>
                 ) : (
-                  /* RFQ closed, no bid submitted */
+                  /* Case C: RFQ Closed without vendor submission */
                   <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--card-item-bg)', borderRadius: 'var(--radius-sm)' }}>
                     <ShieldAlert size={36} style={{ color: 'var(--danger)', marginBottom: '0.5rem' }} />
                     <h4>Bidding Period Ended</h4>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>This RFQ is closed/awarded and no longer accepting quotations.</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      This RFQ is closed/awarded and no longer accepting quotations.
+                    </p>
                   </div>
                 )
               ) : (
-                /* Internal user — RFQ line items and vendor list */
+                /* Internal Buyer View: Sourced Line Items & Invited Suppliers */
                 <div>
                   <h4 style={{ fontSize: '0.95rem', color: 'var(--accent)', marginBottom: '0.75rem' }}>Line Items Sourced</h4>
                   <div className="table-container" style={{ marginBottom: '1.5rem' }}>
@@ -657,17 +783,23 @@ export const RFQs = () => {
                 </div>
               )}
             </div>
+
             <div className="modal-footer">
-              <button onClick={() => setShowDetailsModal(false)} className="btn btn-secondary">Close</button>
+              <button onClick={() => setShowDetailsModal(false)} className="btn btn-secondary">
+                Close
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* AI Bid Comparison Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 3: AI BID COMPARISON & CONTRACT AWARDING
+      ───────────────────────────────────────────────────────────── */}
       {showCompareModal && selectedRfq && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '980px' }}>
+            {/* Header */}
             <div className="modal-header">
               <div>
                 <span style={{ color: 'var(--accent)', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -676,16 +808,20 @@ export const RFQs = () => {
                 </span>
                 <h3 style={{ margin: '2px 0 0 0' }}>RFQ: {selectedRfq.rfq_number}</h3>
               </div>
-              <button onClick={() => setShowCompareModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <button
+                onClick={() => setShowCompareModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
                 <X size={18} />
               </button>
             </div>
+
             <div className="modal-body">
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
                 Review and compare all quotation submissions compiled for this sourcing request with real-time ML decision evaluation.
               </p>
 
-              {/* ML recommendation banner */}
+              {/* AI Recommendation Banner */}
               {rfqQuotations.length > 0 && rfqQuotations.aiEvaluation && (
                 <div style={{
                   background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.12) 100%)',
@@ -734,11 +870,14 @@ export const RFQs = () => {
                 </div>
               )}
 
+              {/* Quotations comparison table */}
               {rfqQuotations.length === 0 ? (
                 <div style={{ padding: '3rem', textAlign: 'center', background: 'var(--card-item-bg)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)' }}>
                   <ShieldAlert size={36} style={{ color: 'var(--warning)', marginBottom: '0.5rem' }} />
                   <h4>No submissions yet</h4>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>Invited suppliers have not submitted bid responses yet.</p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    Invited suppliers have not submitted bid responses yet.
+                  </p>
                 </div>
               ) : (
                 <div className="table-container">
@@ -759,7 +898,16 @@ export const RFQs = () => {
                         const isTop = metrics.isTopMatch;
 
                         return (
-                          <tr key={quote.id} style={{ background: quote.status === 'Accepted' ? 'rgba(16, 185, 129, 0.06)' : isTop ? 'rgba(168, 85, 247, 0.05)' : 'transparent' }}>
+                          <tr
+                            key={quote.id}
+                            style={{
+                              background: quote.status === 'Accepted'
+                                ? 'rgba(16, 185, 129, 0.06)'
+                                : isTop
+                                  ? 'rgba(168, 85, 247, 0.05)'
+                                  : 'transparent'
+                            }}
+                          >
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{quote.vendor_name}</div>
@@ -779,7 +927,9 @@ export const RFQs = () => {
                                   </span>
                                 )}
                               </div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Remarks: {quote.remarks || 'None'}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                Remarks: {quote.remarks || 'None'}
+                              </div>
                               {metrics.strengths?.length > 0 && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
                                   {metrics.strengths.map((st, i) => (
@@ -824,7 +974,9 @@ export const RFQs = () => {
                                 <span>{parseFloat(quote.vendor_rating).toFixed(1)}</span>
                                 <Star size={12} fill="var(--warning)" style={{ color: 'var(--warning)' }} />
                               </div>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--success)' }}>Score: {quote.performance_score}/100</span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--success)' }}>
+                                Score: {quote.performance_score}/100
+                              </span>
                             </td>
                             <td>{quote.delivery_days} days</td>
                             <td>
@@ -836,7 +988,7 @@ export const RFQs = () => {
                               {selectedRfq.status === 'Open' ? (
                                 <button
                                   onClick={() => handleAwardContract(quote.id)}
-                                  className={isTop ? "btn" : "btn btn-primary"}
+                                  className={isTop ? 'btn' : 'btn btn-primary'}
                                   style={{
                                     padding: '0.4rem 0.8rem',
                                     fontSize: '0.75rem',
@@ -866,13 +1018,17 @@ export const RFQs = () => {
                 </div>
               )}
             </div>
+
             <div className="modal-footer">
-              <button onClick={() => setShowCompareModal(false)} className="btn btn-secondary">Close</button>
+              <button onClick={() => setShowCompareModal(false)} className="btn btn-secondary">
+                Close
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Upgrade Quota Modal */}
       <UpgradeModal
         isOpen={upgradeModal.isOpen}
         onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Building2, ArrowRight, UserPlus, LogIn, Sparkles, Truck } from 'lucide-react';
+import { Building2, UserPlus, LogIn, Sparkles, Truck } from 'lucide-react';
 import axios from 'axios';
 
 export const Login = () => {

@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Star, Award, UserCheck, UserX, Plus, Edit3, X, AlertCircle, Crown } from 'lucide-react';
+import { Star, Award, UserCheck, UserX, Plus, Edit3, X, Crown } from 'lucide-react';
 import UpgradeModal from '../components/UpgradeModal';
 
+/**
+ * Supplier Directory Page
+ * Manage onboarded suppliers, review scorecard metrics, and conduct performance audits.
+ */
 export const Vendors = () => {
   const { api, user } = useAuth();
+
+  // Component state
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Subscription state & Upgrade modal
+  // Subscription metadata & upgrade modal state
   const [subData, setSubData] = useState(null);
   const [upgradeModal, setUpgradeModal] = useState({
     isOpen: false,
@@ -21,12 +27,12 @@ export const Vendors = () => {
     currentCount: 0
   });
 
-  // Modals Toggles
+  // Modal visibility toggles
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEvalModal, setShowEvalModal] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
 
-  // Add Vendor States
+  // New Vendor form fields
   const [name, setName] = useState('');
   const [contactName, setContactName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,10 +40,11 @@ export const Vendors = () => {
   const [category, setCategory] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
 
-  // Evaluation States
+  // Vendor evaluation scorecard fields
   const [evalScore, setEvalScore] = useState(100);
   const [evalRating, setEvalRating] = useState(5.0);
 
+  // Fetch subscription quotas for the tenant
   const fetchSubData = async () => {
     if (user.role === 'Vendor') return;
     try {
@@ -48,6 +55,7 @@ export const Vendors = () => {
     }
   };
 
+  // Fetch vendor catalog
   const fetchVendors = async () => {
     try {
       const res = await api.get('/api/vendors');
@@ -65,6 +73,7 @@ export const Vendors = () => {
     fetchSubData();
   }, []);
 
+  // Handle manual onboarding of a supplier
   const handleAddVendor = async (e) => {
     e.preventDefault();
     setError('');
@@ -105,6 +114,7 @@ export const Vendors = () => {
     }
   };
 
+  // Handle status update (e.g., Active, Blocked, Pending Approval)
   const handleStatusChange = async (vendorId, status) => {
     try {
       await api.put(`/api/vendors/${vendorId}`, { status });
@@ -126,11 +136,12 @@ export const Vendors = () => {
     }
   };
 
+  // Handle scorecard audit evaluation submission
   const handleEvaluation = async (e) => {
     e.preventDefault();
     try {
       await api.put(`/api/vendors/${selectedVendor.id}/evaluate`, {
-        performanceScore: parseInt(evalScore),
+        performanceScore: parseInt(evalScore, 10),
         rating: parseFloat(evalRating)
       });
       setShowEvalModal(false);
@@ -141,10 +152,15 @@ export const Vendors = () => {
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading suppliers...</div>;
+  if (loading) {
+    return <div style={{ padding: '2rem' }}>Loading suppliers...</div>;
+  }
 
   return (
     <div>
+      {/* ─────────────────────────────────────────────────────────────
+          PAGE HEADER & QUOTA USAGE BADGE
+      ───────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -161,7 +177,9 @@ export const Vendors = () => {
                 fontSize: '0.8rem'
               }}>
                 <Crown size={14} style={{ color: subData.plan === 'Starter' ? 'var(--primary)' : 'var(--warning)' }} />
-                <span><strong>{subData.planName} Quota:</strong> {subData.usage?.activeVendors} / {subData.usage?.maxVendors === -1 ? '∞' : subData.usage?.maxVendors} Approved Vendors</span>
+                <span>
+                  <strong>{subData.planName} Quota:</strong> {subData.usage?.activeVendors} / {subData.usage?.maxVendors === -1 ? '∞' : subData.usage?.maxVendors} Approved Vendors
+                </span>
                 {subData.plan === 'Starter' && (
                   <Link to="/subscriptions" style={{ color: 'var(--primary)', fontWeight: '600', marginLeft: '0.25rem', textDecoration: 'none' }}>
                     Upgrade
@@ -170,7 +188,9 @@ export const Vendors = () => {
               </div>
             )}
           </div>
-          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>Manage onboarded corporate suppliers, track metrics, and run scorecard audits.</p>
+          <p className="page-subtitle" style={{ marginTop: '0.25rem' }}>
+            Manage onboarded corporate suppliers, track metrics, and run scorecard audits.
+          </p>
         </div>
 
         {user.role !== 'Employee' && (
@@ -181,13 +201,16 @@ export const Vendors = () => {
         )}
       </div>
 
+      {/* Error Alert */}
       {error && (
         <div className="alert-danger">
           {error}
         </div>
       )}
 
-      {/* Vendors Table */}
+      {/* ─────────────────────────────────────────────────────────────
+          VENDORS TABLE
+      ───────────────────────────────────────────────────────────── */}
       <div className="glass-panel" style={{ padding: 0 }}>
         <div className="table-container">
           <table className="custom-table">
@@ -300,7 +323,9 @@ export const Vendors = () => {
         </div>
       </div>
 
-      {/* Add Vendor Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 1: ADD VENDOR
+      ───────────────────────────────────────────────────────────── */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -345,15 +370,21 @@ export const Vendors = () => {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Supplier</button>
+                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Create Supplier
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Evaluate Vendor Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          MODAL 2: EVALUATE VENDOR SCORECARD
+      ───────────────────────────────────────────────────────────── */}
       {showEvalModal && selectedVendor && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -395,14 +426,19 @@ export const Vendors = () => {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => { setShowEvalModal(false); setSelectedVendor(null); }} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Submit Scorecard</button>
+                <button type="button" onClick={() => { setShowEvalModal(false); setSelectedVendor(null); }} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Submit Scorecard
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* Upgrade Quota Modal */}
       <UpgradeModal
         isOpen={upgradeModal.isOpen}
         onClose={() => setUpgradeModal(prev => ({ ...prev, isOpen: false }))}

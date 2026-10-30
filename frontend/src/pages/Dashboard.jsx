@@ -6,7 +6,6 @@ import {
   FileText,
   Users,
   Layers,
-  ShoppingBag,
   ClipboardCheck,
   Star,
   Activity,

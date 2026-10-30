@@ -3,19 +3,15 @@ import { useAuth } from '../context/AuthContext';
 import {
   CreditCard,
   CheckCircle2,
-  Zap,
   Sparkles,
   ShieldCheck,
   FileText,
   Clock,
-  RefreshCw,
-  AlertTriangle,
   QrCode,
   Lock,
   ArrowRight,
   Download,
   X,
-  Check,
   Building2,
   Crown
 } from 'lucide-react';

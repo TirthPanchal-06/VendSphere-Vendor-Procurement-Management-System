@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { pool, queryGlobal } from '../config/db.js';
+import { pool } from '../config/db.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);

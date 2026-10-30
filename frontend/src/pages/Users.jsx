@@ -1,23 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Users as UsersIcon, Plus, X, UserPlus, ShieldAlert, Award } from 'lucide-react';
+import { UserPlus, X, Award } from 'lucide-react';
 
+/**
+ * Company User Directory Page
+ * Provides corporate staff listing and RBAC account registration for Admins.
+ */
 export const Users = () => {
   const { api } = useAuth();
+
+  // Component state
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Add User Modal Toggle
+  // Modal toggle
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Form Fields States
+  // Form fields state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('Employee');
   const [department, setDepartment] = useState('Engineering');
 
+  // Load corporate staff directory
   const fetchUsers = async () => {
     try {
       const res = await api.get('/api/auth/users');
@@ -34,6 +41,7 @@ export const Users = () => {
     fetchUsers();
   }, []);
 
+  // Handle registration of a new staff account
   const handleAddUserSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -59,10 +67,13 @@ export const Users = () => {
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading user directories...</div>;
+  if (loading) {
+    return <div style={{ padding: '2rem' }}>Loading user directories...</div>;
+  }
 
   return (
     <div>
+      {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h1 className="page-title">Company User Directory</h1>
@@ -75,6 +86,7 @@ export const Users = () => {
         </button>
       </div>
 
+      {/* Error Alert */}
       {error && (
         <div className="alert-danger">
           {error}
@@ -139,7 +151,10 @@ export const Users = () => {
           <div className="modal-content">
             <div className="modal-header">
               <h3>Register Staff Account</h3>
-              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <button
+                onClick={() => setShowAddModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+              >
                 <X size={18} />
               </button>
             </div>
@@ -147,15 +162,36 @@ export const Users = () => {
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">Full Name</label>
-                  <input type="text" className="form-input" placeholder="e.g. Tirth Panchal" value={name} onChange={e => setName(e.target.value)} required />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Tirth Panchal"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    required
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Corporate Email Address</label>
-                  <input type="email" className="form-input" placeholder="e.g. tirth.p@company.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="e.g. tirth.p@company.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Sign-In Password</label>
-                  <input type="password" className="form-input" placeholder="Password (minimum 6 chars)" value={password} onChange={e => setPassword(e.target.value)} required />
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="Password (minimum 6 chars)"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                  />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div className="form-group">
@@ -169,13 +205,24 @@ export const Users = () => {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Department</label>
-                    <input type="text" className="form-input" placeholder="e.g. Purchasing, Engineering" value={department} onChange={e => setDepartment(e.target.value)} required />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Purchasing, Engineering"
+                      value={department}
+                      onChange={e => setDepartment(e.target.value)}
+                      required
+                    />
                   </div>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" className="btn btn-primary">Create User Account</button>
+                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Create User Account
+                </button>
               </div>
             </form>
           </div>

@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { GitMerge, Plus, Trash2, Shield, Settings, X } from 'lucide-react';
+import { GitMerge, Plus, Trash2, X } from 'lucide-react';
 
+/**
+ * Approval Workflows Configuration Page
+ * Configure rule-based multi-stage approval sequences triggered by monetary purchase thresholds.
+ */
 export const Workflows = () => {
   const { api } = useAuth();
+
+  // Component state
   const [workflows, setWorkflows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Creation Form 
+  // Workflow Creation Form state
   const [showAddModal, setShowAddModal] = useState(false);
   const [name, setName] = useState('');
   const [thresholdAmount, setThresholdAmount] = useState(0);
   const [steps, setSteps] = useState([{ step_number: 1, role: 'Manager' }]);
 
+  // Fetch configured approval workflows
   const fetchWorkflows = async () => {
     try {
       const res = await api.get('/api/purchase-requests/workflows/all');
@@ -30,6 +37,7 @@ export const Workflows = () => {
     fetchWorkflows();
   }, []);
 
+  // Multi-stage step handlers
   const handleAddStep = () => {
     setSteps([...steps, { step_number: steps.length + 1, role: 'Admin' }]);
   };
@@ -49,6 +57,7 @@ export const Workflows = () => {
     setSteps(updated);
   };
 
+  // Submit workflow rule
   const handleSubmitWorkflow = async (e) => {
     e.preventDefault();
     try {
@@ -67,10 +76,13 @@ export const Workflows = () => {
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading workflows...</div>;
+  if (loading) {
+    return <div style={{ padding: '2rem' }}>Loading workflows...</div>;
+  }
 
   return (
     <div>
+      {/* Page Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h1 className="page-title">Approval Workflows</h1>
@@ -82,6 +94,7 @@ export const Workflows = () => {
         </button>
       </div>
 
+      {/* Error Alert */}
       {error && (
         <div className="alert-danger">
           {error}
@@ -152,7 +165,7 @@ export const Workflows = () => {
         )}
       </div>
 
-      {/* Add Workflow Model */}
+      {/* Add Workflow Modal */}
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal-content">
